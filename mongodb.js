@@ -6,9 +6,9 @@ const MongoClient = require('mongodb').MongoClient
 const ObjectID = require('mongodb').ObjectID
 
 let _db
-function query (func) {
+function query (func, args) {
   if (_db) {
-    return P.coroutine(func)(_db)
+    return P.coroutine(func)(_db, args)
   }
 
   // mongodb://[username:password@]host1[:port1][/[database]
@@ -17,7 +17,7 @@ function query (func) {
   return MongoClient.connect(process.env.PULLDATA_MONGO_DB_URL)
   .then((db) => {
     _db = db
-    return P.coroutine(func)(_db)
+    return P.coroutine(func)(_db, args)
   })
 }
 
