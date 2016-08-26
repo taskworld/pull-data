@@ -104,7 +104,7 @@ function * exportMemberships (db, opts) {
       return {
         workspaceName: x.name,
         workspaceDisplayName: x.display_name,
-        ownerName: `${owner.first_name} ${owner.first_name}`,
+        ownerName: `${owner.first_name} ${owner.last_name}`,
         ownerEmail: owner.email,
         subscription: m.membership_type,
         paymentType: m.payment_account && m.payment_account.payment_type || null,
