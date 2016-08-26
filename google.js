@@ -1,15 +1,15 @@
 'use strict'
 
-const Fs = require('fs')
 const Moment = require('moment')
 const Chalk = require('chalk')
 const Google = require('googleapis')
-const Csv = require('fast-csv')
 const Analytics = Google.analyticsreporting('v4')
 
 const oauth2Client = new Google.auth.OAuth2()
 
+const Util = require('./util')
 const Argv = require('minimist')(process.argv.slice(2))
+
 run(Argv)
 
 function getJwtClient () {
@@ -26,28 +26,68 @@ function getJwtClient () {
   )
 }
 
+function getDataFetcher (query, params) {
+  let pages = 0
+  let rows = []
+  const reportFileName = `/tmp/${params.reportName}.csv`
+  console.log(`Creating report ${reportFileName}`)
+
+  const batchGet = () => {
+    Analytics.reports.batchGet(query, (err, data) => {
+      if (err) {
+        return console.error(err)
+      }
+
+      if (!data.reports[0].data.rows) {
+        console.log('No results!')
+        return
+      }
+
+      const numRows = data.reports[0].data.rows.length
+      ++pages
+
+      if (numRows) {
+        console.log(`Fetched ${numRows} rows from GA.`)
+
+        rows = rows.concat(convertGoogleReport(data))
+
+        if (data.reports[0].nextPageToken && pages < 3) {
+          getNextPageQuery(query)
+          batchGet()
+        } else if (rows.length) {
+          Util.writeCsv(rows, reportFileName)
+          .then(() => console.log('It’s a Done Deal.'))
+        }
+      }
+    })
+  }
+  return batchGet
+}
+
 function run (args) {
-  const param = parseOpts(args)
-  const query = queryGenerator(param)
+  const params = parseOpts(args)
+  const query = queryGenerator(params)
 
   console.log(`
-    Query Generated for:
-    GA ID: ${Chalk.white(param.viewId)}
-    From: ${Chalk.white(param.from)}
-    To: ${Chalk.white(param.to)}
-    With the following Query:
+    Generated Query:
+
+    GA ID: ${Chalk.white(params.viewId)}
+    From:  ${Chalk.white(params.from)}
+    To:    ${Chalk.white(params.to)}
+    Query: ${JSON.stringify(query, false, 2)}
   `)
-  console.log(JSON.stringify(query))
+
   getJwtClient().authorize((err, token) => {
     if (err) {
       return console.log(err)
     }
     oauth2Client.setCredentials(token)
-    Analytics.reports.batchGet(query, handleGAResponse)
+    // Fetch data until we’re done.
+    getDataFetcher(query, params)()
   })
 }
 
-function Usage(error) {
+function Usage (error) {
   if (error) {
     console.log(`
       ${Chalk.red.bold(error)}
@@ -57,26 +97,32 @@ function Usage(error) {
   console.log(`
   Usage: node <script> [options]
 
-    --id            GA Account ID, e.g. ga:123456789 (${Chalk.red('required')})
-    --from          Start exporting from <date>, format 'YYYY-MM-DD' (${Chalk.red('required')})
-    --to            Stop exporting at <date>, format 'YYYY-MM-DD' (${Chalk.red('required')})
+    --id            GA Account ID, e.g. ga:123456789 (${Chalk.red('required')}).
+
+    --from          Start exporting from <date>, format 'YYYY-MM-DD' (${Chalk.red('required')}).
+
+    --to            Stop exporting at <date>, format 'YYYY-MM-DD' (${Chalk.red('required')}).
                     If not provided, defaults as of ${Chalk.white('<today>')}
-    --dimensions    GA dimension fields (comma separated)
+
+    --dimensions    GA dimension fields (comma separated).
                     e.g. --dimensions ga:date,ga:country,ga:city (${Chalk.red('required')})
-    --metrics       GA metric fields (comma separated)
+
+    --metrics       GA metric fields (comma separated).
                     e.g. --metrics ga:uniqueEvents,ga:totalEvents (${Chalk.red('required')})
-    --sortby        GA dimension fields (comma separated)
+
+    --sortby        GA dimension fields (comma separated).
                     e.g. ga:date,ga:country (optional)
         ${Chalk.white('--order')}     ASC | DESC (comma separated) (required if --sortby is provided)
                     e.g. --sortby ga:date,ga:country --order ASC,DESC
                     e.g. --sortby ga:date,ga:country --order DESC
+
+    --name          Name of the report.
   `)
 
   process.exit()
 }
 
-
-function parseOpts(opts) {
+function parseOpts (opts) {
   let id = opts['id'] || Usage('--id is required')
   let from = opts['from'] || Usage('--from is required')
   let to = opts['to'] || Moment().format('YYYY-MM-DD')
@@ -84,6 +130,8 @@ function parseOpts(opts) {
   let metrics = opts['metrics'] || Usage('--metrics is required')
   let sortby = opts['sortby'] ? opts['sortby'] : false
   let order = (opts['sortby'] && opts['order']) ? opts['order'] : 'ASC'
+  let filter = opts['filter']
+  let reportName = opts['name'] || `report-${opts['from']}`
 
   if (sortby && !order) {
     for (let i = 0; i < sortby.split(',').length; ++i) {
@@ -97,15 +145,11 @@ function parseOpts(opts) {
 
   dimensions = dimensions
   .split(',')
-  .map(x => ({
-    'name': x
-  }))
+  .map((x) => ({ name: x }))
 
   metrics = metrics
   .split(',')
-  .map(x => ({
-    'expression': x
-  }))
+  .map((x) => ({ expression: x }))
 
   if (sortby) {
     sortby = sortby
@@ -116,55 +160,78 @@ function parseOpts(opts) {
     }))
   }
 
-  const param = {
+  const params = {
     viewId: id,
     from: from,
     to: to,
     dimensions: dimensions,
     metrics: metrics,
-    sortby: sortby
+    sortby: sortby,
+    reportName
   }
 
-  return param
+  if (filter) {
+    const filterParts = filter.split(',')
+    params.filters = [{
+      name: filterParts[0],
+      operator: filterParts[1],
+      expression: filterParts[2]
+    }]
+  }
+
+  return params
 }
 
+function getNextPageQuery (oldQuery, nextPageToken) {
+  oldQuery.resource.reportRequests[0].pageToken = nextPageToken
+  return oldQuery
+}
 
-function queryGenerator(param) {
+function queryGenerator (params) {
   const query = {
     'headers': { 'Content-Type': 'application/json' },
     'auth': oauth2Client,
     'resource': {
       'reportRequests': [
         {
-          'viewId': param.viewId,
+          'viewId': params.viewId,
           'dateRanges': [
             {
-              'startDate': param.from,
-              'endDate': param.to
+              'startDate': params.from,
+              'endDate': params.to
             }
           ],
-          'dimensions': param.dimensions,
-          'metrics': param.metrics,
-          'orderBys': param.sortby,
-          'pageSize': 10000,
-          'includeEmptyRows': true,
-          'hideTotals': false,
-          'hideValueRanges': false
+          'dimensions': params.dimensions,
+          'metrics': params.metrics,
+          'orderBys': params.sortby,
+          'pageSize': params.pageSize,
+          'pageToken': params.pageToken,
+          'includeEmptyRows': false,
+          'hideTotals': true,
+          'hideValueRanges': true
         }
       ]
     }
   }
 
+  if (params.filters) {
+    query.resource.reportRequests[0].dimensionFilterClauses = [{
+      operator: 'AND',
+      filters: params.filters.map((x) => createFilterClause(x))
+    }]
+  }
+
   return query
 }
 
-function handleGAResponse (err, data) {
-  if (err) {
-    throw err
+function createFilterClause (opts) {
+  return {
+    dimensionName: opts.name,
+    not: false,
+    operator: opts.operator.toUpperCase(),
+    expressions: [opts.expression],
+    caseSensitive: true
   }
-  console.log('Converting the Google report ..')
-  const rows = convertGoogleReport(data)
-  console.log('rows=', rows)
 }
 
 function convertGoogleReport (json) {
