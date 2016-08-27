@@ -4,7 +4,7 @@ const Moment = require('moment')
 const Mongo = require('./mongodb')
 const Util = require('./util')
 
-const MAX_DOCS = 5000
+const MAX_DOCS = 10000
 
 const Argv = require('minimist')(process.argv.slice(2))
 if (Argv.from && Argv.to) {
@@ -19,16 +19,16 @@ if (Argv.from && Argv.to) {
 
 function run (args) {
   pullDataFromMongoDb(
-    Moment(args.from).toDate(),
-    Moment(args.to).toDate()
+    Moment(args.from),
+    Moment(args.to)
   )
 }
 
 function pullDataFromMongoDb (startDate, endDate) {
   console.log(`
   Pulling membership data:
-  Start Date: ${startDate}
-  End Date:   ${endDate}
+  Start Date: ${startDate.format()}
+  End Date:   ${endDate.format()}
   `)
 
   return Mongo.query(exportMemberships, {
@@ -39,12 +39,36 @@ function pullDataFromMongoDb (startDate, endDate) {
   .catch((err) => console.error(err))
 }
 
+const _blacklistedEmails = [
+  '@mailinator.com',
+  '@mouawad.com',
+  '@taskworld.com',
+  '@synovafoods.com',
+  'dadademau@gmail.com'
+]
+const _blacklistedEmailsRegexp = new RegExp(
+  '(' + _blacklistedEmails.join('|') + ')$', 'i'
+)
+function isBlacklistedEmailAddress (email) {
+  return _blacklistedEmailsRegexp.test(email)
+}
+
 function * exportMemberships (db, opts) {
-  console.log('Exporting ..')
+  const dateRange =
+    opts.startDate.format('YYYY-MM-DD') + '-' +
+    opts.endDate.format('YYYY-MM-DD')
+
+  console.log(`Exporting Taskworld data for period ${dateRange} ..`)
 
   // Fetch all memberships.
   const memberships = yield db.collection('memberships')
-  .find({ start_date: { $gte: opts.startDate, $lt: opts.endDate } })
+  .find({
+    membership_type: { $ne: 'free_trial' },
+    start_date: {
+      $gte: opts.startDate.toDate(),
+      $lt: opts.endDate.toDate()
+    }
+  })
   .sort({ _id: -1 })
   .limit(MAX_DOCS)
   .toArray()
@@ -67,7 +91,7 @@ function * exportMemberships (db, opts) {
 
   // Extract all members.
   const membersTmp = workspaces.reduce((acc, x) => {
-    acc.push(...x.admins, x.owner_id)
+    acc.push(...(x.admins || []), x.owner_id)
     return acc
   }, [])
 
@@ -100,16 +124,23 @@ function * exportMemberships (db, opts) {
         console.error('Unknown workspace owner:', x.owner_id)
         return false
       }
+      if (isBlacklistedEmailAddress(owner.email)) {
+        console.error('Blacklisted owner email address:', owner.email)
+        return false
+      }
 
       return {
         workspaceName: x.name,
         workspaceDisplayName: x.display_name,
+        workspaceCreatedDate: Moment(x.created).format(),
         ownerName: `${owner.first_name} ${owner.last_name}`,
         ownerEmail: owner.email,
         subscription: m.membership_type,
+        subscriptionId: m.subscription_id,
         paymentType: m.payment_account && m.payment_account.payment_type || null,
-        subscriptionStartDate: m.start_subscription_date,
-        subscriptionEndDate: m.expiry_date,
+        membershipStartDate: Moment(m.start_date).format(),
+        subscriptionStartDate: Moment(m.start_subscription_date).format(),
+        subscriptionEndDate: Moment(m.expiry_date).format(),
         licenses: m.user_limit,
         billingCycle: m.billing_cycle_type
       }
@@ -118,10 +149,15 @@ function * exportMemberships (db, opts) {
   })
   .filter((x) => x)
 
+  report.sort((a, b) => {
+    return a.membershipStartDate > b.membershipStartDate ? -1 : 1
+  })
+
   // console.log(userMap)
   // console.log(report)
-  console.log(`Created a report with ${report.length} rows.`)
+  const reportFileName = `/tmp/tw-data-${dateRange}.csv`
+  console.log(`Creating ${reportFileName} with ${report.length} rows ..`)
 
   // Dump to CSV.
-  yield Util.writeCsv(report, '/tmp/tw-data.csv')
+  yield Util.writeCsv(report, reportFileName)
 }

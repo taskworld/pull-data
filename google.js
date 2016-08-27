@@ -5,6 +5,8 @@ const Chalk = require('chalk')
 const Google = require('googleapis')
 const Analytics = Google.analyticsreporting('v4')
 
+const PAGE_SIZE = 5000
+
 const oauth2Client = new Google.auth.OAuth2()
 
 const Util = require('./util')
@@ -26,8 +28,17 @@ function getJwtClient () {
   )
 }
 
+function hasNextPage (data, query) {
+  const pageToken = data.reports[0].nextPageToken
+  if (!pageToken) {
+    return false
+  }
+  query.resource.reportRequests[0].pageToken = pageToken
+  console.log(`Set page token to ${query.resource.reportRequests[0].pageToken}`)
+  return true
+}
+
 function getDataFetcher (query, params) {
-  let pages = 0
   let rows = []
   const reportFileName = `/tmp/${params.reportName}.csv`
   console.log(`Creating report ${reportFileName}`)
@@ -37,24 +48,22 @@ function getDataFetcher (query, params) {
       if (err) {
         return console.error(err)
       }
-
       if (!data.reports[0].data.rows) {
-        console.log('No results!')
-        return
+        return console.log('No results!')
       }
 
       const numRows = data.reports[0].data.rows.length
-      ++pages
-
       if (numRows) {
         console.log(`Fetched ${numRows} rows from GA.`)
-
         rows = rows.concat(convertGoogleReport(data))
 
-        if (data.reports[0].nextPageToken && pages < 3) {
-          getNextPageQuery(query)
+        // Continue if there’s a next page.
+        if (hasNextPage(data, query)) {
           batchGet()
+        // Otherwise we’re done.
         } else if (rows.length) {
+          console.log(`Writing ${rows.length} rows to ${reportFileName}.`)
+
           Util.writeCsv(rows, reportFileName)
           .then(() => console.log('It’s a Done Deal.'))
         }
@@ -182,11 +191,6 @@ function parseOpts (opts) {
   return params
 }
 
-function getNextPageQuery (oldQuery, nextPageToken) {
-  oldQuery.resource.reportRequests[0].pageToken = nextPageToken
-  return oldQuery
-}
-
 function queryGenerator (params) {
   const query = {
     'headers': { 'Content-Type': 'application/json' },
@@ -204,7 +208,7 @@ function queryGenerator (params) {
           'dimensions': params.dimensions,
           'metrics': params.metrics,
           'orderBys': params.sortby,
-          'pageSize': params.pageSize,
+          'pageSize': PAGE_SIZE,
           'pageToken': params.pageToken,
           'includeEmptyRows': false,
           'hideTotals': true,
