@@ -150,7 +150,7 @@ function * exportMemberships (db, opts) {
   .filter((x) => x)
 
   report.sort((a, b) => {
-    return a.membershipStartDate > b.membershipStartDate ? -1 : 1
+    return a.subscriptionStartDate > b.subscriptionStartDate ? -1 : 1
   })
 
   // console.log(userMap)
