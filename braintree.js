@@ -116,6 +116,12 @@ function getSubscriptions () {
 
   stream.on('end', () => {
     console.log(`It’s a Done Deal. Read ${rows.length} rows total.`)
+
+    // Sort it.
+    rows.sort((a, b) => {
+      return a.firstBillingDate > b.firstBillingDate ? -1 : 1
+    })
+
     // Dump to CSV.
     Util.writeCsv(rows, '/tmp/braintree-subscription-data.csv')
   })

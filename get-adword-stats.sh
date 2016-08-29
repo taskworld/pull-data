@@ -7,4 +7,4 @@ node google.js \
  --metrics ga:adCost,ga:adClicks,ga:goal7Completions \
  --sortby ga:date \
  --order DESC \
- --name adwords-data-$1
+ --name adword-stats

@@ -155,7 +155,7 @@ function * exportMemberships (db, opts) {
 
   // console.log(userMap)
   // console.log(report)
-  const reportFileName = `/tmp/tw-data-${dateRange}.csv`
+  const reportFileName = `/tmp/tw-data.csv`
   console.log(`Creating ${reportFileName} with ${report.length} rows ..`)
 
   // Dump to CSV.

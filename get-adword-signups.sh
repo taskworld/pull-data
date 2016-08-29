@@ -8,4 +8,4 @@ node google.js \
  --sortby ga:date \
  --order DESC \
  --filter ga:eventAction,EXACT,Completed-SignUp \
- --name adword-signups-$1
+ --name adword-signups

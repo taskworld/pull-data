@@ -7,4 +7,4 @@ node google.js \
  --metrics ga:totalEvents \
  --sortby ga:date,ga:eventAction \
  --order DESC,ASC \
- --name ga-signup-data-$1
+ --name ga-events
