@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "nodemon --ext js,html --watch reports reports/customers.js"
   },
   "author": "",
   "license": "ISC",
@@ -17,5 +17,8 @@
     "minimist": "^1.2.0",
     "moment": "^2.14.1",
     "mongodb": "^2.2.8"
+  },
+  "devDependencies": {
+    "nodemon": "^1.10.2"
   }
 }
