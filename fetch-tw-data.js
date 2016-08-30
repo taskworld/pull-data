@@ -139,7 +139,7 @@ function * exportMemberships (db, opts) {
         subscriptionId: m.subscription_id,
         paymentType: m.payment_account && m.payment_account.payment_type || null,
         membershipStartDate: Moment(m.start_date).format(),
-        subscriptionStartDate: Moment(m.start_subscription_date).format(),
+        subscriptionStartDate: Moment(m.start_subscription_date || m.start_date).format(),
         subscriptionEndDate: Moment(m.expiry_date).format(),
         licenses: m.user_limit,
         billingCycle: m.billing_cycle_type

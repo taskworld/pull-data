@@ -41,8 +41,14 @@
       .stats {
         width: 500px;
       }
+      .new-row {
+        color: #4cb992;
+        color: #3499e0;
+        color: #efb57c;
+        font-weight: 600;
+      }
     </style>
-    <link href="https://fonts.googleapis.com/css?family=Lato" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css?family=Lato,400,600" rel="stylesheet">
     <link rel="icon" type="image/ico" href="https://awsmedia.s3.amazonaws.com/favicon.ico"/>
     <link rel="shortcut icon" type="image/ico" href="https://awsmedia.s3.amazonaws.com/favicon.ico"/>
     <link rel="stylesheet"
@@ -60,181 +66,9 @@
     <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/6.14.0/babel.min.js"></script>
     <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/react/15.3.1/react.min.js"></script>
     <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/react/15.3.1/react-dom.min.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/classnames/2.2.5/index.min.js"></script>
     <script type="text/babel">
-
-      function getTotalLicenses () {
-        return reportData
-        .filter((x) => x.subscription === 'premium')
-        .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
-      }
-
-      let startingMonth = moment().subtract(4, 'months')
-      if (startingMonth.isBefore(moment('2016-05-01'))) {
-        startingMonth = moment('2016-05-01')
-      }
-      const churnRatePerMonth = getChurnRatePerMonth(startingMonth, 4)
-
-      function range (num) {
-        return [ ...new Array(num) ].map((x, i) => i)
-      }
-
-      function getChurnRatePerMonth (startMonth, numMonths) {
-        return range(numMonths).map((month) => {
-          const start = startMonth.clone()
-          .add(month, 'months')
-          .startOf('month')
-          const end = start.clone().endOf('month')
-          const churn = getChurnRateForPeriod(start, end)
-          return {
-            start,
-            end,
-            churnRate: churn.churnRate,
-            newLicenses: churn.newLicenses
-          }
-        })
-
-        function getChurnRateForPeriod (startDate, endDate) {
-          const newLicenses = reportData
-          .filter((x) => x.subscription === 'premium')
-          .filter((x) => moment(x.subscriptionStartDate).isBetween(startDate, endDate))
-          .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
-
-          const churnedLicenses = reportData
-          .filter((x) => x.subscription === 'canceled')
-          .filter((x) => moment(x.subscriptionStartDate).isBetween(startDate, endDate))
-          .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
-
-          console.log(`Churn rate in month ${startDate.format('YYYY-MM')}: ${churnedLicenses} churned / ${newLicenses} new licenses.`)
-          return {
-            churnedLicenses,
-            newLicenses,
-            churnRate: churnedLicenses / newLicenses * 100
-          }
-        }
-      }
-
-      function getChurnRate () {
-        const newLicensesAfterMay1st = reportData
-        .filter((x) => x.subscription === 'premium')
-        .filter((x) => (
-          moment(x.subscriptionStartDate).isAfter(moment('2016-05-01')) &&
-          moment(x.workspaceCreatedDate).isAfter(moment('2016-05-01'))
-        ))
-        .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
-
-        const churnedLicensesAfterMay1st = reportData
-        .filter((x) => x.subscription === 'canceled')
-        .filter((x) => (
-          moment(x.subscriptionStartDate).isAfter(moment('2016-05-01')) &&
-          moment(x.workspaceCreatedDate).isAfter(moment('2016-05-01'))
-        ))
-        .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
-
-        console.log(`Churn rate: ${churnedLicensesAfterMay1st} churned / ${newLicensesAfterMay1st} new licenses.`)
-        return churnedLicensesAfterMay1st / newLicensesAfterMay1st * 100
-      }
-
-      function getAveragePurchaseTimeInDays () {
-        const rows = reportData
-        .filter((x) => x.subscription === 'premium')
-        .filter((x) => (
-          moment(x.subscriptionStartDate).isAfter(moment('2016-05-01')) &&
-          moment(x.workspaceCreatedDate).isAfter(moment('2016-05-01'))
-        ))
-
-        return rows
-        .reduce((acc, x) => {
-          const startDate = moment(x.workspaceCreatedDate)
-          const endDate = moment(x.subscriptionStartDate)
-          const duration = moment.duration(endDate.diff(startDate))
-          const days = duration.asDays()
-          return acc + days
-        }, 0) / rows.length
-      }
-
-      class App extends React.Component {
-        render () {
-          const { report } = this.props
-          return (
-            <div className='tw-report'>
-              <div className='inner'>
-                <table className='stats'>
-                  <tr>
-                    <td>Total Active Licenses:</td>
-                    <td>{getTotalLicenses()}</td>
-                  </tr>
-                  <tr>
-                    <td>Churn Rate:</td>
-                    <td>{getChurnRate().toFixed(2)}%</td>
-                  </tr>
-                  <tr>
-                    <td>Average Days from Trial to Purchase:</td>
-                    <td>{getAveragePurchaseTimeInDays().toFixed(2)}</td>
-                  </tr>
-                  <tr>
-                    <td>Churn Rate per Month:</td>
-                    <td>{churnRatePerMonth.map((x, i) => (
-                      <span className='percentage' key={i}>{x.churnRate.toFixed(2)}%</span>
-                    ))}</td>
-                  </tr>
-                  <tr>
-                    <td>Licenses per Month:</td>
-                    <td>{churnRatePerMonth.map((x, i) => (
-                      <span className='percentage' key={i}>{x.newLicenses}</span>
-                    ))}</td>
-                  </tr>
-                </table>
-
-                <hr/>
-
-                <table className='table table-hover table-inverse tw-report-table'>
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Workspace Name</th>
-                      <th>Created</th>
-                      <th>Owner Name</th>
-                      <th>Owner Email</th>
-                      <th>Subscription</th>
-                      <th>Start Date</th>
-                      <th>Payment Type</th>
-                      <th>Licenses</th>
-                      <th>Billing Cycle</th>
-                      <th>Payment Source</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.map((x, i) => (
-                      <ReportRow key={i} row={x} remaining={report.length - i} />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )
-        }
-      }
-
-      const ReportRow = ({ row, remaining }) => (
-        <tr className={row.subscription === 'canceled' ? 'bg-danger' : ''}>
-          <td>{remaining}</td>
-          <td>{row.workspaceDisplayName}</td>
-          <td className='nowrap'>{moment(row.workspaceCreatedDate).format('YYYY-MM-DD')}</td>
-          <td>{row.ownerName}</td>
-          <td>{row.ownerEmail}</td>
-          <td>{row.subscription}</td>
-          <td className='nowrap'>{moment(row.subscriptionStartDate).format('YYYY-MM-DD')}</td>
-          <td>{row.paymentType}</td>
-          <td>{row.licenses}</td>
-          <td>{row.billingCycle}</td>
-          <td>{row.subscriptionId ? 'BrainTree' : 'PayPal Invoice'}</td>
-        </tr>
-      )
-
-      ReactDOM.render(
-        <App report={reportData} />,
-        document.getElementById('react-app')
-      )
+      {{SCRIPT}}
     </script>
   </body>
 </html>
