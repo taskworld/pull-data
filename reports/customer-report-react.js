@@ -48,19 +48,19 @@ function getChurnRatePerMonth (startMonth, numMonths) {
 function getChurnRateForPeriod (startDate, endDate) {
   const newLicenses = reportData
   .filter((x) => x.subscription === 'premium')
-  .filter((x) => moment(x.subscriptionStartDate).isBetween(startDate, endDate))
+  .filter((x) => moment(x.subscriptionStartDate).isBefore(startDate))
   .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
 
   const churnedLicenses = reportData
   .filter((x) => x.subscription === 'canceled')
-  .filter((x) => moment(x.subscriptionStartDate).isBetween(startDate, endDate))
+  .filter((x) => moment(x.subscriptionEndDate).isBetween(startDate, endDate))
   .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
 
   console.log(`Churn rate in month ${startDate.format('YYYY-MM')}: ${churnedLicenses} churned / ${newLicenses} new licenses.`)
   return {
     churnedLicenses,
     newLicenses,
-    churnRate: churnedLicenses / newLicenses * 100
+    churnRate: newLicenses ? (churnedLicenses / newLicenses * 100) : 0
   }
 }
 
@@ -117,7 +117,7 @@ class App extends React.Component {
               ))}</td>
             </tr>
             <tr>
-              <td>Licenses per Month ({period}):</td>
+              <td>Licenses Total (month-to-month):</td>
               <td>{churn.map((x, i) => (
                 <span className='percentage' key={i}>{x.newLicenses}</span>
               ))}</td>
@@ -140,6 +140,9 @@ class App extends React.Component {
                 <th>Licenses</th>
                 <th>Billing Cycle</th>
                 <th>Payment Source</th>
+                <th>Signup Source</th>
+                <th>Channel</th>
+                <th>Country</th>
               </tr>
             </thead>
             <tbody>
@@ -160,10 +163,18 @@ App.propTypes = {
 }
 
 const ReportRow = ({ row, remaining }) => {
+  const isToday = moment(row.subscriptionStartDate).isAfter(moment().subtract(8, 'hours'))
   const isNew = moment(row.subscriptionStartDate).isAfter(moment().subtract(2, 'days'))
+
   const cls = classNames({
     'bg-danger': row.subscription === 'canceled'
   })
+  const newCls = classNames({
+    'nowrap': true,
+    'new-row-green': isToday,
+    'new-row': !isToday && isNew
+  })
+
   return (
     <tr className={cls}>
       <td>{remaining}</td>
@@ -172,11 +183,14 @@ const ReportRow = ({ row, remaining }) => {
       <td>{row.ownerName}</td>
       <td>{row.ownerEmail}</td>
       <td>{row.subscription}</td>
-      <td className='nowrap'>{moment(row.subscriptionStartDate).format('YYYY-MM-DD')}</td>
+      <td className={newCls}>{moment(row.subscriptionStartDate).format('YYYY-MM-DD')}</td>
       <td>{row.paymentType}</td>
-      <td className={isNew ? 'new-row' : ''}>{row.licenses}</td>
-      <td className={isNew ? 'new-row' : ''}>{row.billingCycle}</td>
-      <td className='nowrap'>{row.subscriptionId ? 'BrainTree' : 'PayPal Invoice'}</td>
+      <td className={newCls}>{row.licenses}</td>
+      <td className={newCls}>{row.billingCycle}</td>
+      <td>{row.subscriptionId ? 'BrainTree' : 'Invoice'}</td>
+      <td>{row.signupSource}</td>
+      <td>{row.channel}</td>
+      <td>{row.country}</td>
     </tr>
   )
 }
