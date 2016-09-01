@@ -1,9 +1,12 @@
 'use strict'
 
+const Assert = require('assert')
 const Moment = require('moment')
 const Chalk = require('chalk')
 const Google = require('googleapis')
 const Analytics = Google.analyticsreporting('v4')
+
+Assert(process.env.PULLDATA_GOOGLE_API_JSON, 'Missing env `PULLDATA_GOOGLE_API_JSON`')
 
 const PAGE_SIZE = 5000
 
@@ -18,7 +21,7 @@ function getJwtClient () {
   const scopes = [
     'https://www.googleapis.com/auth/analytics.readonly'
   ]
-  const credentials = require('../google-api-credentials.json')
+  const credentials = require(process.env.PULLDATA_GOOGLE_API_JSON)
   return new Google.auth.JWT(
     credentials.client_email,
     null,
