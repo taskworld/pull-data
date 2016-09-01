@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon --ext js,html --watch reports reports/customers.js"
+    "dev": "nodemon --ext js,html --watch reports reports/customers.js",
+    "server": "nodemon --ext js,html --watch reports reports/server.js"
   },
   "author": "",
   "license": "ISC",
