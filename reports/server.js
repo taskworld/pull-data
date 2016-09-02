@@ -5,15 +5,7 @@ const assert = require('assert')
 const http = require('http')
 const fs = require('fs')
 
-// assert(process.env.PULLDATA_TLS_CERT, 'Missing env `PULLDATA_TLS_CERT`')
-// assert(process.env.PULLDATA_TLS_PRIVKEY, 'Missing env `PULLDATA_TLS_PRIVKEY`')
-// assert(process.env.PULLDATA_HOST, 'Missing env `PULLDATA_HOST`')
 assert(process.env.PULLDATA_CODE, 'Missing env `PULLDATA_CODE`')
-
-// const options = {
-//   key: fs.readFileSync(process.env.PULLDATA_TLS_PRIVKEY),
-//   cert: fs.readFileSync(process.env.PULLDATA_TLS_CERT)
-// }
 
 http.createServer((req, res) => {
   const params = url.parse(req.url, true)

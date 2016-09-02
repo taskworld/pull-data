@@ -36,31 +36,42 @@ function getChurnRatePerMonth (startMonth, numMonths) {
     .startOf('month')
     const end = start.clone().endOf('month')
     const churn = getChurnRateForPeriod(start, end)
+
     return {
       start,
       end,
       churnRate: churn.churnRate,
-      newLicenses: churn.newLicenses
+      newInPeriod: churn.newInPeriod,
+      accumulatedBeforePeriod: churn.accumulatedBeforePeriod
     }
   })
 }
 
 function getChurnRateForPeriod (startDate, endDate) {
-  const newLicenses = reportData
+  const accumulatedBeforePeriod = reportData
   .filter((x) => x.subscription === 'premium')
   .filter((x) => moment(x.subscriptionStartDate).isBefore(startDate))
   .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
 
-  const churnedLicenses = reportData
+  const newInPeriod = reportData
+  .filter((x) => x.subscription === 'premium')
+  .filter((x) => moment(x.subscriptionStartDate).isBetween(startDate, endDate))
+  .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
+
+  const churned = reportData
   .filter((x) => x.subscription === 'canceled')
   .filter((x) => moment(x.subscriptionEndDate).isBetween(startDate, endDate))
   .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
 
-  console.log(`Churn rate in month ${startDate.format('YYYY-MM')}: ${churnedLicenses} churned / ${newLicenses} new licenses.`)
+  console.log(
+    `Churn rate in month ${startDate.format('YYYY-MM')}: ` +
+    `${churned} churned / ${accumulatedBeforePeriod} acculmulated licenses before period.`
+  )
   return {
-    churnedLicenses,
-    newLicenses,
-    churnRate: newLicenses ? (churnedLicenses / newLicenses * 100) : 0
+    churned,
+    newInPeriod,
+    accumulatedBeforePeriod,
+    churnRate: accumulatedBeforePeriod ? (churned / accumulatedBeforePeriod * 100) : 0
   }
 }
 
@@ -85,11 +96,6 @@ function getAveragePurchaseTimeInDays () {
 class App extends React.Component {
   render () {
     const { report, churn } = this.props
-    const period =
-      churn[0].start.format('MMM') +
-      ' - ' +
-      churn[churn.length - 1].end.format('MMM YYYY')
-
     return (
       <div className='tw-report'>
         <div className='inner'>
@@ -111,15 +117,32 @@ class App extends React.Component {
               <td>{getAveragePurchaseTimeInDays().toFixed(2)}</td>
             </tr>
             <tr>
-              <td>Churn Rate ({period}):</td>
+              <td>Churn Rate:</td>
+              <td>
+                {churn.map((x, i) => (
+                  <span className='percentage'>
+                    {x.start.format('MMM')}: &nbsp;
+                    {x.churnRate.toFixed(2)}%
+                  </span>
+                ))}
+              </td>
+            </tr>
+            <tr>
+              <td>New Licenses per Month:</td>
               <td>{churn.map((x, i) => (
-                <span className='percentage' key={i}>{x.churnRate.toFixed(2)}%</span>
+                <span className='percentage' key={i}>
+                  {x.start.format('MMM')}: &nbsp;
+                  {x.newInPeriod}
+                </span>
               ))}</td>
             </tr>
             <tr>
-              <td>Licenses Total (month-to-month):</td>
+              <td>Accumulated Licenses:</td>
               <td>{churn.map((x, i) => (
-                <span className='percentage' key={i}>{x.newLicenses}</span>
+                <span className='percentage' key={i}>
+                  {x.start.format('MMM')}: &nbsp;
+                  {x.accumulatedBeforePeriod}
+                </span>
               ))}</td>
             </tr>
           </table>
