@@ -3,6 +3,8 @@
 const P = require('bluebird')
 const Fs = require('fs')
 const Path = require('path')
+const Moment = require('moment')
+
 const Util = require('../util')
 
 renderTaskworldReport('/tmp/tw-data.csv', '/tmp/adword-signups.csv')
@@ -30,6 +32,10 @@ function renderTaskworldReport (twCsvFile, adwordsCsvFile) {
         x.channel = source['ga:sourceMedium']
         x.country = source['ga:country']
       }
+      x.membershipDays = Math.min(
+        Moment(x.subscriptionEndDate).diff(Moment(x.subscriptionStartDate), 'days'),
+        Moment().diff(Moment(x.subscriptionStartDate), 'days')
+      )
     })
 
     let html = Fs.readFileSync(Path.join(__dirname, 'layout.html'), 'utf8')

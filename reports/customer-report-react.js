@@ -15,11 +15,11 @@ function getTotalLicenses () {
 }
 
 function getChurnRates () {
-  let startingMonth = moment().subtract(4, 'months')
-  if (startingMonth.isBefore(moment('2016-05-01'))) {
-    startingMonth = moment('2016-05-01')
+  let startMonth = moment().subtract(4, 'months')
+  if (startMonth.isBefore(moment('2016-05-01'))) {
+    startMonth = moment('2016-05-01')
   }
-  return getChurnRatePerMonth(startingMonth, 4)
+  return getChurnRatePerMonth(startMonth, 4)
 }
 
 function getLicensesAfter (date) {
@@ -30,7 +30,8 @@ function getLicensesAfter (date) {
 }
 
 function getChurnRatePerMonth (startMonth, numMonths) {
-  return range(numMonths).map((month) => {
+  console.log('Starting from month:', startMonth.format())
+  return range(numMonths + 1).map((month) => {
     const start = startMonth.clone()
     .add(month, 'months')
     .startOf('month')
@@ -40,6 +41,7 @@ function getChurnRatePerMonth (startMonth, numMonths) {
     return {
       start,
       end,
+      endOfLastPeriod: start.clone().subtract(1, 'second'),
       churnRate: churn.churnRate,
       newInPeriod: churn.newInPeriod,
       accumulatedBeforePeriod: churn.accumulatedBeforePeriod
@@ -64,7 +66,7 @@ function getChurnRateForPeriod (startDate, endDate) {
   .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
 
   console.log(
-    `Churn rate in month ${startDate.format('YYYY-MM')}: ` +
+    `Churn rate in period ${startDate.format()} - ${endDate.format()}: ` +
     `${churned} churned / ${accumulatedBeforePeriod} acculmulated licenses before period.`
   )
   return {
@@ -94,6 +96,38 @@ function getAveragePurchaseTimeInDays () {
 }
 
 class App extends React.Component {
+  renderTable (title, report) {
+    return (
+      <div>
+        <h1>{title}</h1>
+        <table className='table table-hover table-inverse tw-report-table'>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Workspace Name</th>
+              <th>Created</th>
+              <th>Owner Name</th>
+              <th>Owner Email</th>
+              <th>Subscription</th>
+              <th>Start Date</th>
+              <th>Payment Type</th>
+              <th>Licenses</th>
+              <th>Billing Cycle</th>
+              <th>Payment Source</th>
+              <th>Signup Source</th>
+              <th>Channel</th>
+              <th>Country</th>
+            </tr>
+          </thead>
+          <tbody>
+            {report.map((x, i) => (
+              <ReportRow key={i} row={x} remaining={report.length - i} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
   render () {
     const { report, churn } = this.props
     return (
@@ -121,7 +155,7 @@ class App extends React.Component {
               <td>
                 {churn.map((x, i) => (
                   <span className='percentage'>
-                    {x.start.format('MMM')}: &nbsp;
+                    <span className='month'>{x.start.format('MMM')}:</span>
                     {x.churnRate.toFixed(2)}%
                   </span>
                 ))}
@@ -131,7 +165,7 @@ class App extends React.Component {
               <td>New Licenses per Month:</td>
               <td>{churn.map((x, i) => (
                 <span className='percentage' key={i}>
-                  {x.start.format('MMM')}: &nbsp;
+                  <span className='month'>{x.start.format('MMM')}:</span>
                   {x.newInPeriod}
                 </span>
               ))}</td>
@@ -140,7 +174,7 @@ class App extends React.Component {
               <td>Accumulated Licenses:</td>
               <td>{churn.map((x, i) => (
                 <span className='percentage' key={i}>
-                  {x.start.format('MMM')}: &nbsp;
+                  <span className='month'>{x.endOfLastPeriod.format('MMM')}:</span>
                   {x.accumulatedBeforePeriod}
                 </span>
               ))}</td>
@@ -149,31 +183,17 @@ class App extends React.Component {
 
           <hr/>
 
-          <table className='table table-hover table-inverse tw-report-table'>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Workspace Name</th>
-                <th>Created</th>
-                <th>Owner Name</th>
-                <th>Owner Email</th>
-                <th>Subscription</th>
-                <th>Start Date</th>
-                <th>Payment Type</th>
-                <th>Licenses</th>
-                <th>Billing Cycle</th>
-                <th>Payment Source</th>
-                <th>Signup Source</th>
-                <th>Channel</th>
-                <th>Country</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.map((x, i) => (
-                <ReportRow key={i} row={x} remaining={report.length - i} />
-              ))}
-            </tbody>
-          </table>
+          {this.renderTable(
+            'Active Customers',
+            report.filter(x => x.subscription === 'premium')
+          )}
+
+          <hr/>
+
+          {this.renderTable(
+            'Churned Customers',
+            report.filter(x => x.subscription !== 'premium')
+          )}
         </div>
       </div>
     )
@@ -186,26 +206,31 @@ App.propTypes = {
 }
 
 const ReportRow = ({ row, remaining }) => {
-  const isToday = moment(row.subscriptionStartDate).isAfter(moment().subtract(8, 'hours'))
-  const isNew = moment(row.subscriptionStartDate).isAfter(moment().subtract(2, 'days'))
+  const isWithinToday = moment(row.subscriptionStartDate).isAfter(
+    moment().startOf('day')
+  )
+  const isWithin48Hours = moment(row.subscriptionStartDate).isAfter(
+    moment().subtract(2, 'days').startOf('day')
+  )
 
-  const cls = classNames({
-    'bg-danger': row.subscription === 'canceled'
-  })
   const newCls = classNames({
     'nowrap': true,
-    'new-row-green': isToday,
-    'new-row': !isToday && isNew
+    'row-green': isWithinToday,
+    'row-amber': !isWithinToday && isWithin48Hours,
+    'row-red': row.subscription === 'canceled'
   })
 
   return (
-    <tr className={cls}>
+    <tr>
       <td>{remaining}</td>
       <td>{row.workspaceDisplayName}</td>
       <td className='nowrap'>{moment(row.workspaceCreatedDate).format('YYYY-MM-DD')}</td>
       <td>{row.ownerName}</td>
       <td>{row.ownerEmail}</td>
-      <td>{row.subscription}</td>
+      <td>
+        <div>{row.subscription}</div>
+        <div className='details'>{row.membershipDays} days</div>
+      </td>
       <td className={newCls}>{moment(row.subscriptionStartDate).format('YYYY-MM-DD')}</td>
       <td>{row.paymentType}</td>
       <td className={newCls}>{row.licenses}</td>
