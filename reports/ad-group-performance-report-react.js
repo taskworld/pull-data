@@ -20,16 +20,56 @@ class App extends React.Component {
           <thead>
             <tr>
               <th>Date</th>
-              <th>Paid Marketing Cost</th>
-              <th>Clicks</th>
-              <th>Signups</th>
-              <th>Signups (Paid)</th>
-              <th>Licenses</th>
-              <th>Licenses (Paid)</th>
-              <th>Cost per Signup</th>
-              <th>Cost per License</th>
-              <th>Conversion Rate</th>
-              <th>Conversion Rate (Paid)</th>
+              <th>
+                Marketing Cost
+                <div className='details'>Other</div>
+              </th>
+              <th>
+                Marketing Cost
+                <div className='details'>Paid Traffic</div>
+              </th>
+              <th>
+                Clicks
+                <div className='details'>Paid Traffic</div>
+              </th>
+              <th>
+                Signups
+                <div className='details'>Total</div>
+              </th>
+              <th>
+                Signups
+                <div className='details'>Paid Traffic</div>
+              </th>
+              <th>
+                Licenses
+                <div className='details'>Total</div>
+              </th>
+              <th>
+                Licenses
+                <div className='details'>Paid Traffic</div>
+              </th>
+
+              <th>
+                Cost per License
+                <div className='details'>Total</div>
+              </th>
+              <th>
+                Cost per License
+                <div className='details'>Paid Traffic</div>
+              </th>
+              <th>
+                Cost per Signup
+                <div className='details'>Paid Traffic</div>
+              </th>
+
+              <th>
+                Conversion Rate
+                <div className='details'>Total</div>
+              </th>
+              <th>
+                Conversion Rate
+                <div className='details'>Paid Traffic</div>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -70,17 +110,29 @@ App.propTypes = {
 
 const ReportRow = ({ row }) => {
   const style = { textAlign: 'right' }
+  const percentagePaidVsUnpaid = row.totalLicenses
+    ? Math.round(row.licensesPaidMarketing / row.totalLicenses * 100)
+    : null
   return (
     <tr>
       <td style={style}>{row.date.format('YYYY-MM')}</td>
+      <td style={style}>$ {round(row.totalCostOtherMarketing, 2).toLocaleString()}</td>
       <td style={style}>$ {round(row.totalCostPaidMarketing, 2).toLocaleString()}</td>
       <td style={style}>{row.totalClicks.toLocaleString()}</td>
       <td style={style}>{row.totalSignups.toLocaleString()}</td>
       <td style={style}>{row.signupsPaidMarketing.toLocaleString()}</td>
       <td style={style}>{row.totalLicenses.toLocaleString()}</td>
-      <td style={style}>{row.licensesPaidMarketing.toLocaleString()}</td>
-      <td style={style}>$ {round(row.costPerSignupPaidMarketing, 2).toLocaleString()}</td>
+      <td style={{ ...style, position: 'relative' }}>
+        {row.licensesPaidMarketing.toLocaleString()}
+        <div className='details fixed-right'>
+          {percentagePaidVsUnpaid ? '(' + percentagePaidVsUnpaid + ' %)' : ''}
+        </div>
+      </td>
+
+      <td style={style}>$ {round(row.costPerLicenseAllChannels, 2).toLocaleString()}</td>
       <td style={style}>$ {round(row.costPerLicensePaidMarketing, 2).toLocaleString()}</td>
+      <td style={style}>$ {round(row.costPerSignupPaidMarketing, 2).toLocaleString()}</td>
+
       <td style={style}>{row.conversionRateAllChannels} %</td>
       <td style={style}>{row.conversionRatePaidMarketing} %</td>
     </tr>
@@ -91,19 +143,28 @@ const TotalRow = ({ report }) => {
   const style = { textAlign: 'right' }
 
   const getTotal = (field) => report.reduce((acc, x) => acc + x[field], 0)
-  const getAverage = (field) => report.reduce((acc, x) => acc + Number(x[field]), 0) / report.length
+  const getAverage = (field) => {
+    return (
+      report.reduce((acc, x) => acc + Number(x[field]), 0) /
+      (report.filter(x => Number(x[field])).length || 1)
+    )
+  }
 
   return (
     <tr style={{ backgroundColor: '#4cb992', color: 'white' }}>
       <td style={style}>Total</td>
+      <td style={style}>$ {round(getTotal('totalCostOtherMarketing'), 2).toLocaleString()}</td>
       <td style={style}>$ {round(getTotal('totalCostPaidMarketing'), 2).toLocaleString()}</td>
       <td style={style}>{getTotal('totalClicks').toLocaleString()}</td>
       <td style={style}>{getTotal('totalSignups').toLocaleString()}</td>
       <td style={style}>{getTotal('signupsPaidMarketing').toLocaleString()}</td>
       <td style={style}>{getTotal('totalLicenses').toLocaleString()}</td>
       <td style={style}>{getTotal('licensesPaidMarketing').toLocaleString()}</td>
-      <td style={style}>$ {round(getAverage('costPerSignupPaidMarketing'), 2).toLocaleString()}</td>
+
+      <td style={style}>$ {round(getAverage('costPerLicenseAllChannels'), 2).toLocaleString()}</td>
       <td style={style}>$ {round(getAverage('costPerLicensePaidMarketing'), 2).toLocaleString()}</td>
+      <td style={style}>$ {round(getAverage('costPerSignupPaidMarketing'), 2).toLocaleString()}</td>
+
       <td style={style}>{round(getAverage('conversionRateAllChannels'), 2)} %</td>
       <td style={style}>{round(getAverage('conversionRatePaidMarketing'), 2)} %</td>
     </tr>

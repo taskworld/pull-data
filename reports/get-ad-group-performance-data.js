@@ -52,6 +52,10 @@ function renderAdStatsReport (adSignupCsvFile, adStatsCsvFile, twCsvFile) {
 
       if (!acc.month[month]) {
         acc.month[month] = createMonthEntry()
+        // HACK: Hardcode some fixed marketing expenses.
+        if (month >= '201605') {
+          acc.month[month].totalCostOtherMarketing = 15000.00 // $15,000 USD fixed
+        }
       }
       acc.month[month].totalCostPaidMarketing += cost
       acc.month[month].totalClicks += clicks
@@ -121,6 +125,9 @@ function calculateAcquisitionCosts (statsReport) {
     const m = statsReport.month[x]
     m.costPerSignupPaidMarketing = getNumber(m.totalCostPaidMarketing / m.signupsPaidMarketing)
     m.costPerLicensePaidMarketing = getNumber(m.totalCostPaidMarketing / m.licensesPaidMarketing)
+    m.costPerLicenseAllChannels = getNumber(
+      (m.totalCostOtherMarketing + m.totalCostPaidMarketing) / m.totalLicenses
+    )
     m.conversionRateAllChannels = getNumber(m.totalLicenses / m.totalSignups * 100).toFixed(2)
     m.conversionRatePaidMarketing = getNumber(m.licensesPaidMarketing / m.signupsPaidMarketing * 100).toFixed(2)
   })
@@ -158,7 +165,8 @@ function createMonthEntry () {
     totalCustomers: 0,
     totalLicenses: 0,
     signupsPaidMarketing: 0,
-    licensesPaidMarketing: 0
+    licensesPaidMarketing: 0,
+    totalCostOtherMarketing: 0
   }
 }
 

@@ -3,8 +3,10 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "repository": "git@github.com:anrid/pull-data.git",
   "scripts": {
-    "dev": "nodemon --ext js,html --watch reports reports/customers.js",
+    "customers-dev": "nodemon --ext js,html --watch reports reports/customers.js",
+    "ad-group-dev": "nodemon --ext js,html --watch reports reports/ad-group-performance.js",
     "server-dev": "nodemon --ext js,html --watch reports reports/server.js"
   },
   "author": "",
