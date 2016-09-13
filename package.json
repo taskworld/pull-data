@@ -22,6 +22,7 @@
     "minimist": "^1.2.0",
     "moment": "^2.14.1",
     "mongodb": "^2.2.8",
+    "paypal-rest-sdk": "^1.6.9",
     "tcomb": "^3.2.13"
   },
   "devDependencies": {

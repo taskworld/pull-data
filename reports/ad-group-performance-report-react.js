@@ -127,7 +127,7 @@ const MonthlyReportRow = ({ row }) => {
     <tr>
       <td style={style}>{row.date.format('YYYY-MM')}</td>
       <td style={style}>$ {round(row.totalCostPaidMarketing, 2).toLocaleString()}</td>
-      <td style={style}>{row.totalSessions.toLocaleString()}</td>
+      <td style={style}>{row.totalUsers.toLocaleString()}</td>
       <td style={style}>{row.totalClicks.toLocaleString()}</td>
       <td style={style}>{row.totalSignups.toLocaleString()}</td>
       <td style={style}>{row.signupsPaidMarketing.toLocaleString()}</td>
@@ -164,7 +164,7 @@ const MonthlyTotalRow = ({ report }) => {
     <tr style={{ backgroundColor: '#4cb992', color: 'white' }}>
       <td style={style}>Total</td>
       <td style={style}>$ {round(getTotal('totalCostPaidMarketing'), 2).toLocaleString()}</td>
-      <td style={style}>{getTotal('totalSessions').toLocaleString()}</td>
+      <td style={style}>{getTotal('totalUsers').toLocaleString()}</td>
       <td style={style}>{getTotal('totalClicks').toLocaleString()}</td>
       <td style={style}>{getTotal('totalSignups').toLocaleString()}</td>
       <td style={style}>{getTotal('signupsPaidMarketing').toLocaleString()}</td>
@@ -289,7 +289,7 @@ const AdGroupReportRow = ({ row }) => {
     <tr className={cls}>
       <td>{row.adGroup}</td>
       <td style={style}>$ {round(row.totalCostPaidMarketing, 2).toLocaleString()}</td>
-      <td style={style}>{row.totalSessions.toLocaleString()}</td>
+      <td style={style}>{row.totalUsers.toLocaleString()}</td>
       <td style={style}>{row.totalClicks.toLocaleString()}</td>
       <td style={style}>{row.totalSignups.toLocaleString()}</td>
       <td style={style}>{row.totalLicenses.toLocaleString()}</td>
@@ -316,7 +316,7 @@ const AdGroupTotalRow = ({ report }) => {
     <tr style={{ backgroundColor: '#4cb992', color: 'white' }}>
       <td>Total</td>
       <td style={style}>$ {round(getTotal('totalCostPaidMarketing'), 2).toLocaleString()}</td>
-      <td style={style}>{getTotal('totalSessions').toLocaleString()}</td>
+      <td style={style}>{getTotal('totalUsers').toLocaleString()}</td>
       <td style={style}>{getTotal('totalClicks').toLocaleString()}</td>
       <td style={style}>{getTotal('totalSignups').toLocaleString()}</td>
       <td style={style}>{getTotal('totalLicenses').toLocaleString()}</td>

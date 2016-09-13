@@ -16,8 +16,10 @@ function renderTaskworldReport (adGroupJsonFile) {
   const reportFile = '/tmp/ad-group-performance.html'
   Fs.writeFileSync(reportFile, html)
 
-  S3.uploadToS3(S3.createItem(reportFile))
-  .then(res => {
-    console.log('res=', res)
-  })
+  if (process.argv[2] === 'upload') {
+    S3.uploadToS3(S3.createItem(reportFile))
+    .then(res => {
+      console.log('res=', res)
+    })
+  }
 }

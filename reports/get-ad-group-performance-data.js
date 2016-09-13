@@ -49,7 +49,7 @@ function renderAdStatsReport (adSignupCsvFile, adStatsCsvFile, twCsvFile) {
       const cost = parseFloat(x['ga:adCost'])
       const clicks = parseInt(x['ga:adClicks'], 10)
       const signups = parseInt(x['ga:goal7Completions'], 10)
-      const sessions = parseInt(x['ga:sessions'], 10)
+      const users = parseInt(x['ga:users'], 10)
 
       if (!acc.month[month]) {
         acc.month[month] = createStatsEntry()
@@ -57,7 +57,7 @@ function renderAdStatsReport (adSignupCsvFile, adStatsCsvFile, twCsvFile) {
       acc.month[month].totalCostPaidMarketing += cost
       acc.month[month].totalClicks += clicks
       acc.month[month].totalSignups += signups
-      acc.month[month].totalSessions += sessions
+      acc.month[month].totalUsers += users
 
       if (!acc.adGroup[group]) {
         acc.adGroup[group] = createStatsEntry()
@@ -68,7 +68,7 @@ function renderAdStatsReport (adSignupCsvFile, adStatsCsvFile, twCsvFile) {
       acc.adGroup[group].totalCostPaidMarketing += cost
       acc.adGroup[group].totalClicks += clicks
       acc.adGroup[group].totalSignups += signups
-      acc.adGroup[group].totalSessions += sessions
+      acc.adGroup[group].totalUsers += users
 
       if (group !== '(not set)') {
         acc.month[month].signupsPaidMarketing += signups
@@ -157,7 +157,7 @@ function calcStats (e) {
   e.costPerLicenseAllChannels = getNumber(e.totalCostPaidMarketing / e.totalLicenses)
   e.conversionRateAllChannels = getNumber(e.totalLicenses / e.totalSignups * 100).toFixed(2)
   e.conversionRatePaidMarketing = getNumber(e.licensesPaidMarketing / e.signupsPaidMarketing * 100).toFixed(2)
-  e.conversionRateSessions = getNumber(e.totalLicenses / e.totalSessions * 100).toFixed(2)
+  e.conversionRateSessions = getNumber(e.totalLicenses / e.totalUsers * 100).toFixed(2)
 }
 
 function calculateAcquisitionCosts (statsReport) {
@@ -198,7 +198,7 @@ function createStatsEntry () {
     totalCustomers: 0,
     totalLicenses: 0,
     totalLicensesChurned: 0,
-    totalSessions: 0,
+    totalUsers: 0,
     signupsPaidMarketing: 0,
     licensesPaidMarketing: 0,
     licensesPaidMarketingChurned: 0
