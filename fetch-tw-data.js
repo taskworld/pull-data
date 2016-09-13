@@ -142,7 +142,8 @@ function * exportMemberships (db, opts) {
         subscriptionStartDate: Moment(m.start_subscription_date || m.start_date).format(),
         subscriptionEndDate: Moment(m.expiry_date).format(),
         licenses: m.user_limit,
-        billingCycle: m.billing_cycle_type
+        billingCycle: m.billing_cycle_type,
+        amount: m.price
       }
     }
     return false

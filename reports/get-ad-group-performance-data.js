@@ -33,7 +33,7 @@ function renderAdStatsReport (adSignupCsvFile, adStatsCsvFile, twCsvFile) {
     const adGroupToEmailMap = getAdGroupToEmailMap(signupRows)
     console.log('Emails unique:', Object.keys(_stats.emails).length)
 
-    // Add customers for which we do not have signup stats !
+    // Add all customers for which we don’t have signup stats !
     let missingSignupStats = 0
     Object.keys(emailToCustomerMap).forEach(x => {
       if (!_stats.emails[x]) {
@@ -41,7 +41,7 @@ function renderAdStatsReport (adSignupCsvFile, adStatsCsvFile, twCsvFile) {
         ++missingSignupStats
       }
     })
-    console.log('Customers not in signup stats:', missingSignupStats)
+    console.log('Customers missing signup stats:', missingSignupStats)
 
     const statsReport = statsRows.reduce((acc, x) => {
       const group = x['ga:adGroup']
@@ -49,36 +49,31 @@ function renderAdStatsReport (adSignupCsvFile, adStatsCsvFile, twCsvFile) {
       const cost = parseFloat(x['ga:adCost'])
       const clicks = parseInt(x['ga:adClicks'], 10)
       const signups = parseInt(x['ga:goal7Completions'], 10)
+      const sessions = parseInt(x['ga:sessions'], 10)
 
       if (!acc.month[month]) {
-        acc.month[month] = createMonthEntry()
-        // HACK: Hardcode some fixed marketing expenses.
-        if (month >= '201605') {
-          acc.month[month].totalCostOtherMarketing = 15000.00 // $15,000 USD fixed
-        }
+        acc.month[month] = createStatsEntry()
       }
       acc.month[month].totalCostPaidMarketing += cost
       acc.month[month].totalClicks += clicks
       acc.month[month].totalSignups += signups
-      if (group !== '(not set)') {
-        acc.month[month].signupsPaidMarketing += signups
-      }
+      acc.month[month].totalSessions += sessions
 
       if (!acc.adGroup[group]) {
-        // console.log('AdGroup:', group)
-        acc.adGroup[group] = {
-          totalCostPaidMarketing: 0,
-          totalClicks: 0,
-          totalSignups: 0,
-          customers: getCustomers(
-            adGroupToEmailMap[group],
-            emailToCustomerMap
-          )
-        }
+        acc.adGroup[group] = createStatsEntry()
+        acc.adGroup[group].customers = getCustomers(
+          adGroupToEmailMap[group], emailToCustomerMap
+        )
       }
       acc.adGroup[group].totalCostPaidMarketing += cost
       acc.adGroup[group].totalClicks += clicks
       acc.adGroup[group].totalSignups += signups
+      acc.adGroup[group].totalSessions += sessions
+
+      if (group !== '(not set)') {
+        acc.month[month].signupsPaidMarketing += signups
+        acc.adGroup[group].signupsPaidMarketing += signups
+      }
 
       return acc
     }, {
@@ -86,10 +81,10 @@ function renderAdStatsReport (adSignupCsvFile, adStatsCsvFile, twCsvFile) {
       adGroup: { }
     })
 
-    calculateMonthlyCustomerStats(statsReport)
+    calculateCustomerStats(statsReport)
     calculateAcquisitionCosts(statsReport)
 
-    console.log('Report:', JSON.stringify(statsReport.month, null, 2))
+    console.log('Report:', JSON.stringify(statsReport.adGroup['(not set)'], null, 2).substr(0, 1024))
     console.log('Total Licenses:', Object.keys(statsReport.month)
     .reduce((acc, x) => acc + statsReport.month[x].totalLicenses, 0))
 
@@ -100,37 +95,74 @@ function renderAdStatsReport (adSignupCsvFile, adStatsCsvFile, twCsvFile) {
   })
 }
 
-function calculateMonthlyCustomerStats (statsReport) {
-  Object.keys(statsReport.adGroup).forEach(x => {
-    statsReport.adGroup[x].customers.forEach(y => {
-      const workspaceCreatedMonth = Moment(y.workspaceCreatedDate).format('YYYYMM')
-      let r = statsReport.month[workspaceCreatedMonth]
-      if (!r) {
-        r = statsReport.month[workspaceCreatedMonth] = createMonthEntry()
-      }
-      if (y.subscription === 'premium') {
-        const licenses = parseInt(y.licenses, 10)
-        r.totalCustomers++
-        r.totalLicenses += licenses
-        if (x !== '(not set)') {
-          r.licensesPaidMarketing += licenses
-        }
+function calculateCustomerStats (statsReport) {
+  // Sum licences for each AdGroup.
+  Object.keys(statsReport.adGroup).forEach(adGroup => {
+    const adGroupRef = statsReport.adGroup[adGroup]
+    adGroupRef.customers.forEach(customer => {
+      let m
+      const licenses = parseInt(customer.licenses, 10)
+      switch (customer.subscription) {
+
+        case 'premium':
+          const workspaceDate = Moment(customer.workspaceCreatedDate)
+          const workspaceMonth = workspaceDate.format('YYYYMM')
+          m = statsReport.month[workspaceMonth]
+          if (!m) {
+            m = statsReport.month[workspaceMonth] = createStatsEntry()
+          }
+          m.totalCustomers++
+
+          m.totalLicenses += licenses
+          adGroupRef.totalLicenses += licenses
+          addWeekStat(statsReport, workspaceDate, 'totalLicenses', licenses)
+          addWeekStat(adGroupRef, workspaceDate, 'totalLicenses', licenses)
+
+          if (adGroup !== '(not set)') {
+            m.licensesPaidMarketing += licenses
+            adGroupRef.licensesPaidMarketing += licenses
+            addWeekStat(statsReport, workspaceDate, 'licensesPaidMarketing', licenses)
+            addWeekStat(adGroupRef, workspaceDate, 'licensesPaidMarketing', licenses)
+          }
+          break
+
+        case 'canceled':
+          const endDate = Moment(customer.subscriptionEndDate)
+          const endMonth = endDate.format('YYYYMM')
+          m = statsReport.month[endMonth]
+          if (!m) {
+            m = statsReport.month[endMonth] = createStatsEntry()
+          }
+
+          m.totalLicensesChurned += licenses
+          adGroupRef.totalLicensesChurned += licenses
+          addWeekStat(statsReport, endDate, 'totalLicensesChurned', licenses)
+          addWeekStat(adGroupRef, endDate, 'totalLicensesChurned', licenses)
+
+          if (adGroup !== '(not set)') {
+            m.licensesPaidMarketingChurned += licenses
+            adGroupRef.licensesPaidMarketingChurned += licenses
+            addWeekStat(statsReport, endDate, 'licensesPaidMarketingChurned', licenses)
+            addWeekStat(adGroupRef, endDate, 'licensesPaidMarketingChurned', licenses)
+          }
+          break
       }
     })
   })
 }
 
+function calcStats (e) {
+  e.costPerSignupPaidMarketing = getNumber(e.totalCostPaidMarketing / e.signupsPaidMarketing)
+  e.costPerLicensePaidMarketing = getNumber(e.totalCostPaidMarketing / e.licensesPaidMarketing)
+  e.costPerLicenseAllChannels = getNumber(e.totalCostPaidMarketing / e.totalLicenses)
+  e.conversionRateAllChannels = getNumber(e.totalLicenses / e.totalSignups * 100).toFixed(2)
+  e.conversionRatePaidMarketing = getNumber(e.licensesPaidMarketing / e.signupsPaidMarketing * 100).toFixed(2)
+  e.conversionRateSessions = getNumber(e.totalLicenses / e.totalSessions * 100).toFixed(2)
+}
+
 function calculateAcquisitionCosts (statsReport) {
-  Object.keys(statsReport.month).forEach(x => {
-    const m = statsReport.month[x]
-    m.costPerSignupPaidMarketing = getNumber(m.totalCostPaidMarketing / m.signupsPaidMarketing)
-    m.costPerLicensePaidMarketing = getNumber(m.totalCostPaidMarketing / m.licensesPaidMarketing)
-    m.costPerLicenseAllChannels = getNumber(
-      (m.totalCostOtherMarketing + m.totalCostPaidMarketing) / m.totalLicenses
-    )
-    m.conversionRateAllChannels = getNumber(m.totalLicenses / m.totalSignups * 100).toFixed(2)
-    m.conversionRatePaidMarketing = getNumber(m.licensesPaidMarketing / m.signupsPaidMarketing * 100).toFixed(2)
-  })
+  Object.keys(statsReport.month).forEach(x => calcStats(statsReport.month[x]))
+  Object.keys(statsReport.adGroup).forEach(x => calcStats(statsReport.adGroup[x]))
 }
 
 function getNumber (n) {
@@ -144,6 +176,7 @@ function getCustomers (emails, emailToCustomerMap) {
       const customers = emailToCustomerMap[email]
       if (customers) {
         customers.forEach(x => {
+          // Guard against duplicate workspaces.
           if (_stats.workspaces[x.workspaceName]) {
             console.log('Duplicate workspace detected:', x.workspaceDisplayName)
           }
@@ -157,16 +190,18 @@ function getCustomers (emails, emailToCustomerMap) {
   return []
 }
 
-function createMonthEntry () {
+function createStatsEntry () {
   return {
     totalCostPaidMarketing: 0,
     totalClicks: 0,
     totalSignups: 0,
     totalCustomers: 0,
     totalLicenses: 0,
+    totalLicensesChurned: 0,
+    totalSessions: 0,
     signupsPaidMarketing: 0,
     licensesPaidMarketing: 0,
-    totalCostOtherMarketing: 0
+    licensesPaidMarketingChurned: 0
   }
 }
 
@@ -201,4 +236,17 @@ function getAdGroupToEmailMap (signupRows) {
 
     return acc
   }, { })
+}
+
+function addWeekStat (entry, date, key, value) {
+  // Create a map holding week stats.
+  if (!entry.weeks) {
+    entry.weeks = { }
+  }
+  const week = date.format('YYYY[_]WW')
+  let w = entry.weeks[week]
+  if (!w) {
+    w = entry.weeks[week] = createStatsEntry()
+  }
+  w[key] += value
 }
