@@ -187,7 +187,7 @@ function parseOpts (opts) {
     params.filters = [{
       name: filterParts[0],
       operator: filterParts[1],
-      expression: filterParts[2]
+      expression: filterParts.slice(2)
     }]
   }
 
@@ -236,7 +236,7 @@ function createFilterClause (opts) {
     dimensionName: opts.name,
     not: false,
     operator: opts.operator.toUpperCase(),
-    expressions: [opts.expression],
+    expressions: Array.isArray(opts.expression) ? opts.expression : [opts.expression],
     caseSensitive: true
   }
 }

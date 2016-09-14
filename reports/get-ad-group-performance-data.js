@@ -27,6 +27,8 @@ function renderAdStatsReport (adSignupCsvFile, adStatsCsvFile, twCsvFile) {
   ])
   .spread((signupRows, statsRows, twRows) => {
     // Rock on !
+    getTransactionsPerWorkspace()
+
     const emailToCustomerMap = getEmailToCustomerMap(twRows)
     console.log('Unique customers:', Object.keys(emailToCustomerMap).length)
 
@@ -188,6 +190,35 @@ function getCustomers (emails, emailToCustomerMap) {
     }, [])
   }
   return []
+}
+
+function getTransactionsPerWorkspace () {
+  const txn = require('/tmp/tw-transaction-log.json')
+  const map = txn.reduce((acc, x) => {
+    const workspaceId = x.workspace_id
+    if (!acc[workspaceId]) {
+      const sub = x.raw_response.subscription
+      acc[workspaceId] = {
+        subscriptionId: x.subscription_id,
+        kind: x.raw_response.kind,
+        planId: sub.planId,
+        billingPeriodStartDate: sub.billingPeriodStartDate,
+        billingPeriodEndDate: sub.billingPeriodEndDate,
+        transactions: sub.transactions.map(y => ({
+          amount: y.amount,
+          createdAt: y.createdAt,
+          currency: y.currencyIsoCode,
+          status: y.status,
+          email: y.customer.email,
+          type: y.paymentInstrumentType,
+          creditCard: y.creditCard.expirationMonth + '/' + y.creditCard.expirationYear
+        }))
+      }
+    }
+    return acc
+  }, { })
+  // console.log('map=', JSON.stringify(map, null, 2))
+  return map
 }
 
 function createStatsEntry () {

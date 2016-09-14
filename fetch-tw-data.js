@@ -1,8 +1,11 @@
 'use strict'
 
+const P = require('bluebird')
 const Moment = require('moment')
 const Mongo = require('./mongodb')
 const Util = require('./util')
+const Fs = require('fs')
+P.promisifyAll(Fs)
 
 const MAX_DOCS = 10000
 
@@ -26,15 +29,13 @@ function run (args) {
 
 function pullDataFromMongoDb (startDate, endDate) {
   console.log(`
-  Pulling membership data:
+  Pulling data for period:
   Start Date: ${startDate.format()}
   End Date:   ${endDate.format()}
   `)
 
-  return Mongo.query(exportMemberships, {
-    startDate,
-    endDate
-  })
+  return Mongo.query(exportMemberships, { startDate, endDate })
+  .then(() => Mongo.query(exportTransactionLog, { startDate, endDate }))
   .then(Mongo.close)
   .catch((err) => console.error(err))
 }
@@ -51,6 +52,34 @@ const _blacklistedEmailsRegexp = new RegExp(
 )
 function isBlacklistedEmailAddress (email) {
   return _blacklistedEmailsRegexp.test(email)
+}
+
+function * exportTransactionLog (db, opts) {
+  const dateRange =
+    opts.startDate.format('YYYY-MM-DD') + '-' +
+    opts.endDate.format('YYYY-MM-DD')
+
+  console.log(`Exporting Taskworld data for period ${dateRange} ..`)
+
+  // Fetch all transaction log entires.
+  const txns = yield db.collection('transaction_logs')
+  .find({
+    success: true,
+    'raw_response.kind': {
+      $in: ['subscription_canceled', 'subscription_charged_successfully']
+    },
+    created: {
+      $gte: opts.startDate.toDate(),
+      $lt: opts.endDate.toDate()
+    }
+  })
+  .sort({ _id: -1 })
+  .limit(MAX_DOCS)
+  .toArray()
+  console.log(`Found ${txns.length} transaction log entries.`)
+
+  const reportFileName = `/tmp/tw-transaction-log.json`
+  yield Fs.writeFileAsync(reportFileName, JSON.stringify(txns, null, 2))
 }
 
 function * exportMemberships (db, opts) {
@@ -130,6 +159,7 @@ function * exportMemberships (db, opts) {
       }
 
       return {
+        workspaceId: x._id.toString(),
         workspaceName: x.name,
         workspaceDisplayName: x.display_name,
         workspaceCreatedDate: Moment(x.created).format(),

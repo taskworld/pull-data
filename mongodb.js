@@ -23,6 +23,7 @@ function query (func, args) {
 
 function close () {
   if (_db) {
+    console.log('Closing MongoDB connection.')
     _db.close()
   }
 }
