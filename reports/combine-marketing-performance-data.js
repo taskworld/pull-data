@@ -106,7 +106,7 @@ function renderAdStatsReport () {
     .reduce((acc, x) => acc + statsReport.month[x].totalLicenses, 0))
 
     Fs.writeFileSync(
-      '/tmp/ad-group-performance.json',
+      '/tmp/marketing-performance-combined.json',
       JSON.stringify(statsReport, null, 2)
     )
   })

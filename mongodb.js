@@ -21,7 +21,7 @@ function connect (_url) {
   return MongoClient.connect(url)
   .then(db => {
     _db = db
-    console.log('Connected to MongoDB:', _db)
+    console.log('Connected to MongoDB:', _db.s.databaseName)
     return _db
   })
 }

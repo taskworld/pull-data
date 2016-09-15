@@ -4,6 +4,7 @@ const P = require('bluebird')
 const Fs = require('fs')
 const Path = require('path')
 const Moment = require('moment')
+const S3 = require('../lib/s3')
 
 const Util = require('../util')
 
@@ -44,6 +45,14 @@ function renderTaskworldReport (twCsvFile, adwordsCsvFile) {
     .replace('{{DATA}}', JSON.stringify(twRows, null, 2))
     .replace('{{SCRIPT}}', Fs.readFileSync(Path.join(__dirname, 'customer-report-react.js'), 'utf8'))
 
-    Fs.writeFileSync('/tmp/customer-report.html', html)
+    const reportFile = '/tmp/customer-report.html'
+    Fs.writeFileSync(reportFile, html)
+
+    if (process.argv[2] === 'upload') {
+      S3.uploadToS3(S3.createItem(reportFile))
+      .then(res => {
+        console.log('res=', res)
+      })
+    }
   })
 }

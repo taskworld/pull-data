@@ -1,5 +1,8 @@
 'use strict'
 
+console.log('DEPRECATED. DO NO USE.')
+process.exit(1)
+
 const url = require('url')
 const assert = require('assert')
 const http = require('http')
