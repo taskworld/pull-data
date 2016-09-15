@@ -5,19 +5,24 @@ const Assert = require('assert')
 const MongoClient = require('mongodb').MongoClient
 const ObjectID = require('mongodb').ObjectID
 
+Assert(process.env.PULLDATA_MONGO_DB_URL, 'Missing env `PULLDATA_MONGO_DB_URL`')
+
 let _db
 function query (func, args) {
   if (_db) {
     return P.coroutine(func)(_db, args)
   }
+  return connect().then(() => P.coroutine(func)(_db, args))
+}
 
+function connect (_url) {
   // mongodb://[username:password@]host1[:port1][/[database]
-  Assert(process.env.PULLDATA_MONGO_DB_URL, 'Missing env `PULLDATA_MONGO_DB_URL`')
-
-  return MongoClient.connect(process.env.PULLDATA_MONGO_DB_URL)
-  .then((db) => {
+  const url = _url || process.env.PULLDATA_MONGO_DB_URL
+  return MongoClient.connect(url)
+  .then(db => {
     _db = db
-    return P.coroutine(func)(_db, args)
+    console.log('Connected to MongoDB:', _db)
+    return _db
   })
 }
 
@@ -48,6 +53,7 @@ function getObjectId (str) {
 }
 
 module.exports = {
+  connect,
   query,
   close,
   sanityTest,

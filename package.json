@@ -21,7 +21,7 @@
     "mimer": "^0.2.1",
     "minimist": "^1.2.0",
     "moment": "^2.14.1",
-    "mongodb": "^2.2.8",
+    "mongodb": "^2.2.9",
     "paypal-rest-sdk": "^1.6.9",
     "tcomb": "^3.2.13"
   },

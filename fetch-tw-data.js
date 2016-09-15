@@ -35,7 +35,7 @@ function pullDataFromMongoDb (startDate, endDate) {
   `)
 
   return Mongo.query(exportMemberships, { startDate, endDate })
-  .then(() => Mongo.query(exportTransactionLog, { startDate, endDate }))
+  // .then(() => Mongo.query(exportTransactionLog, { startDate, endDate }))
   .then(Mongo.close)
   .catch((err) => console.error(err))
 }
@@ -78,8 +78,36 @@ function * exportTransactionLog (db, opts) {
   .toArray()
   console.log(`Found ${txns.length} transaction log entries.`)
 
+  const txnsMap = getTransactionsByWorkspace(txns)
+
   const reportFileName = `/tmp/tw-transaction-log.json`
-  yield Fs.writeFileAsync(reportFileName, JSON.stringify(txns, null, 2))
+  yield Fs.writeFileAsync(reportFileName, JSON.stringify(txnsMap, null, 2))
+}
+
+function getTransactionsByWorkspace (txns) {
+  return txns.reduce((acc, x) => {
+    const workspaceId = x.workspace_id
+    if (!acc[workspaceId]) {
+      const sub = x.raw_response.subscription
+      acc[workspaceId] = {
+        subscriptionId: x.subscription_id,
+        kind: x.raw_response.kind,
+        planId: sub.planId,
+        billingPeriodStartDate: sub.billingPeriodStartDate,
+        billingPeriodEndDate: sub.billingPeriodEndDate,
+        transactions: sub.transactions.map(y => ({
+          amount: y.amount,
+          createdAt: y.createdAt,
+          currency: y.currencyIsoCode,
+          status: y.status,
+          email: y.customer.email,
+          type: y.paymentInstrumentType,
+          creditCard: y.creditCard.expirationMonth + '/' + y.creditCard.expirationYear
+        }))
+      }
+    }
+    return acc
+  }, { })
 }
 
 function * exportMemberships (db, opts) {

@@ -144,7 +144,7 @@ const MonthlyReportRow = ({ row }) => {
       <td style={style}>$ {round(row.costPerSignupPaidMarketing, 2).toLocaleString()}</td>
 
       <td style={style}>{row.conversionRateAllChannels} %</td>
-      <td style={style}>{row.conversionRateSessions} %</td>
+      <td style={style}>{row.conversionRateUsers} %</td>
     </tr>
   )
 }
@@ -176,7 +176,7 @@ const MonthlyTotalRow = ({ report }) => {
       <td style={style}>$ {round(getAverage('costPerSignupPaidMarketing'), 2).toLocaleString()}</td>
 
       <td style={style}>{round(getAverage('conversionRateAllChannels'), 2)} %</td>
-      <td style={style}>{round(getAverage('conversionRateSessions'), 2)} %</td>
+      <td style={style}>{round(getAverage('conversionRateUsers'), 2)} %</td>
     </tr>
   )
 }
@@ -296,7 +296,7 @@ const AdGroupReportRow = ({ row }) => {
       <td style={style}>$ {round(row.costPerLicenseAllChannels, 2).toLocaleString()}</td>
       <td style={style}>$ {round(row.costPerSignupPaidMarketing, 2).toLocaleString()}</td>
       <td style={style}>{row.conversionRateAllChannels} %</td>
-      <td style={style}>{row.conversionRateSessions} %</td>
+      <td style={style}>{row.conversionRateUsers} %</td>
     </tr>
   )
 }
@@ -323,7 +323,7 @@ const AdGroupTotalRow = ({ report }) => {
       <td style={style}>$ {round(getAverage('costPerLicenseAllChannels'), 2).toLocaleString()}</td>
       <td style={style}>$ {round(getAverage('costPerSignupPaidMarketing'), 2).toLocaleString()}</td>
       <td style={style}>{round(getAverage('conversionRateAllChannels'), 2)} %</td>
-      <td style={style}>{round(getAverage('conversionRateSessions'), 2)} %</td>
+      <td style={style}>{round(getAverage('conversionRateUsers'), 2)} %</td>
     </tr>
   )
 }

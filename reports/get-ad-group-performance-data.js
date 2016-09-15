@@ -6,11 +6,7 @@ const Moment = require('moment')
 
 const Util = require('../util')
 
-renderAdStatsReport(
-  '/tmp/adword-signups.csv',
-  '/tmp/adword-stats.csv',
-  '/tmp/tw-data.csv'
-)
+renderAdStatsReport()
 
 const _stats = {
   customersTotal: 0,
@@ -19,21 +15,24 @@ const _stats = {
   workspaces: { }
 }
 
-function renderAdStatsReport (adSignupCsvFile, adStatsCsvFile, twCsvFile) {
+function renderAdStatsReport () {
   return P.all([
-    Util.readCsv(adSignupCsvFile),
-    Util.readCsv(adStatsCsvFile),
-    Util.readCsv(twCsvFile)
+    Util.readCsv('/tmp/adword-signups.csv'),
+    Util.readCsv('/tmp/adword-stats.csv'),
+    Util.readCsv('/tmp/adgroup-alltime-stats.csv'),
+    Util.readCsv('/tmp/tw-data.csv')
   ])
-  .spread((signupRows, statsRows, twRows) => {
+  .spread((signupRows, statsRows, adGroupStatsRows, twRows) => {
     // Rock on !
-    getTransactionsPerWorkspace()
 
     const emailToCustomerMap = getEmailToCustomerMap(twRows)
     console.log('Unique customers:', Object.keys(emailToCustomerMap).length)
 
     const adGroupToEmailMap = getAdGroupToEmailMap(signupRows)
     console.log('Emails unique:', Object.keys(_stats.emails).length)
+
+    // const sourceMediumToCustomerMap = getSourceMediumToCustomerMap(signupRows, emailToCustomerMap)
+    // console.log(JSON.stringify(sourceMediumToCustomerMap, null, 2))
 
     // Add all customers for which we don’t have signup stats !
     let missingSignupStats = 0
@@ -45,9 +44,14 @@ function renderAdStatsReport (adSignupCsvFile, adStatsCsvFile, twCsvFile) {
     })
     console.log('Customers missing signup stats:', missingSignupStats)
 
-    const statsReport = statsRows.reduce((acc, x) => {
-      const group = x['ga:adGroup']
-      const month = x['ga:date'].substr(0, 6)
+    let statsReport = {
+      sources: { },
+      month: { },
+      adGroup: { }
+    }
+
+    statsReport = statsRows.reduce((acc, x) => {
+      const month = x['ga:year'] + x['ga:month']
       const cost = parseFloat(x['ga:adCost'])
       const clicks = parseInt(x['ga:adClicks'], 10)
       const signups = parseInt(x['ga:goal7Completions'], 10)
@@ -60,7 +64,20 @@ function renderAdStatsReport (adSignupCsvFile, adStatsCsvFile, twCsvFile) {
       acc.month[month].totalClicks += clicks
       acc.month[month].totalSignups += signups
       acc.month[month].totalUsers += users
+      if (cost > 0) {
+        acc.month[month].signupsPaidMarketing += signups
+      }
+      return acc
+    }, statsReport)
 
+    // console.log(JSON.stringify(statsReport, null, 2))
+
+    statsReport = adGroupStatsRows.reduce((acc, x) => {
+      const group = x['ga:adGroup']
+      const cost = parseFloat(x['ga:adCost'])
+      const clicks = parseInt(x['ga:adClicks'], 10)
+      const signups = parseInt(x['ga:goal7Completions'], 10)
+      const users = parseInt(x['ga:users'], 10)
       if (!acc.adGroup[group]) {
         acc.adGroup[group] = createStatsEntry()
         acc.adGroup[group].customers = getCustomers(
@@ -71,22 +88,20 @@ function renderAdStatsReport (adSignupCsvFile, adStatsCsvFile, twCsvFile) {
       acc.adGroup[group].totalClicks += clicks
       acc.adGroup[group].totalSignups += signups
       acc.adGroup[group].totalUsers += users
-
-      if (group !== '(not set)') {
-        acc.month[month].signupsPaidMarketing += signups
+      if (cost > 0) {
         acc.adGroup[group].signupsPaidMarketing += signups
       }
-
       return acc
-    }, {
-      month: { },
-      adGroup: { }
-    })
+    }, statsReport)
 
     calculateCustomerStats(statsReport)
     calculateAcquisitionCosts(statsReport)
 
-    console.log('Report:', JSON.stringify(statsReport.adGroup['(not set)'], null, 2).substr(0, 1024))
+    const example1 = Object.assign({ }, statsReport.adGroup['(not set)'])
+    example1.customers = example1.customers.length
+    console.log('Report example 1 (no AdGroup):')
+    console.log(JSON.stringify(example1, null, 2))
+
     console.log('Total Licenses:', Object.keys(statsReport.month)
     .reduce((acc, x) => acc + statsReport.month[x].totalLicenses, 0))
 
@@ -159,7 +174,7 @@ function calcStats (e) {
   e.costPerLicenseAllChannels = getNumber(e.totalCostPaidMarketing / e.totalLicenses)
   e.conversionRateAllChannels = getNumber(e.totalLicenses / e.totalSignups * 100).toFixed(2)
   e.conversionRatePaidMarketing = getNumber(e.licensesPaidMarketing / e.signupsPaidMarketing * 100).toFixed(2)
-  e.conversionRateSessions = getNumber(e.totalLicenses / e.totalUsers * 100).toFixed(2)
+  e.conversionRateUsers = getNumber(e.totalLicenses / e.totalUsers * 100).toFixed(2)
 }
 
 function calculateAcquisitionCosts (statsReport) {
@@ -190,35 +205,6 @@ function getCustomers (emails, emailToCustomerMap) {
     }, [])
   }
   return []
-}
-
-function getTransactionsPerWorkspace () {
-  const txn = require('/tmp/tw-transaction-log.json')
-  const map = txn.reduce((acc, x) => {
-    const workspaceId = x.workspace_id
-    if (!acc[workspaceId]) {
-      const sub = x.raw_response.subscription
-      acc[workspaceId] = {
-        subscriptionId: x.subscription_id,
-        kind: x.raw_response.kind,
-        planId: sub.planId,
-        billingPeriodStartDate: sub.billingPeriodStartDate,
-        billingPeriodEndDate: sub.billingPeriodEndDate,
-        transactions: sub.transactions.map(y => ({
-          amount: y.amount,
-          createdAt: y.createdAt,
-          currency: y.currencyIsoCode,
-          status: y.status,
-          email: y.customer.email,
-          type: y.paymentInstrumentType,
-          creditCard: y.creditCard.expirationMonth + '/' + y.creditCard.expirationYear
-        }))
-      }
-    }
-    return acc
-  }, { })
-  // console.log('map=', JSON.stringify(map, null, 2))
-  return map
 }
 
 function createStatsEntry () {
@@ -269,15 +255,33 @@ function getAdGroupToEmailMap (signupRows) {
   }, { })
 }
 
+function getSourceMediumToCustomerMap (signupRows, emailToCustomerMap) {
+  return signupRows.reduce((acc, x) => {
+    const source = x['ga:sourceMedium']
+    const email = x['ga:eventLabel']
+    const customer = emailToCustomerMap[email]
+    if (customer) {
+      if (!acc[source]) {
+        acc[source] = []
+      }
+      // console.log('customer', customer)
+      acc[source] = acc[source].concat(customer)
+    }
+    return acc
+  }, { })
+}
+
 function addWeekStat (entry, date, key, value) {
-  // Create a map holding week stats.
-  if (!entry.weeks) {
-    entry.weeks = { }
-  }
-  const week = date.format('YYYY[_]WW')
-  let w = entry.weeks[week]
-  if (!w) {
-    w = entry.weeks[week] = createStatsEntry()
-  }
-  w[key] += value
+  // NOTE: Don’t do this for now.
+  return
+  // // Create a map holding week stats.
+  // if (!entry.weeks) {
+  //   entry.weeks = { }
+  // }
+  // const week = date.format('YYYY[_]WW')
+  // let w = entry.weeks[week]
+  // if (!w) {
+  //   w = entry.weeks[week] = createStatsEntry()
+  // }
+  // w[key] += value
 }
