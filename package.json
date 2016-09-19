@@ -5,8 +5,9 @@
   "main": "index.js",
   "repository": "git@github.com:anrid/pull-data.git",
   "scripts": {
-    "customers-dev": "nodemon --ext js,html --watch reports reports/customers.js",
-    "ad-group-dev": "nodemon --ext js,html --watch reports reports/ad-group-performance.js",
+    "weekly-dev": "nodemon --ext html,js --watch reports reports/create-weekly-stats-report.js",
+    "customers-dev": "nodemon --ext js,html --watch reports reports/create-customers-report.js",
+    "marketing-dev": "nodemon --ext js,html --watch reports reports/create-marketing-performance-report.js",
     "server-dev": "nodemon --ext js,html --watch reports reports/server.js"
   },
   "author": "",

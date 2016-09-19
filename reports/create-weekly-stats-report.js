@@ -7,7 +7,7 @@ const Moment = require('moment')
 const S3 = require('../lib/s3')
 
 const Util = require('../util')
-const StringUtil = require('./stringUtils')
+// const StringUtil = require('./stringUtils')
 
 renderTaskworldReport('/tmp/weekly-stats.csv')
 
@@ -30,7 +30,7 @@ function renderTaskworldReport (weeklyCsvFile) {
     }, { })
 
     const allWeeks = Object.keys(allWeeksMap)
-    allWeeks.sort()
+    allWeeks.sort((a, b) => a < b ? 1 : -1)
     console.log(JSON.stringify(allWeeks, null, 2))
 
     const adGroups = weeklyRows.reduce((acc, x) => {
@@ -86,29 +86,87 @@ function renderTaskworldReport (weeklyCsvFile) {
     console.log(JSON.stringify(allWeekTotals.slice(0, 5), null, 2))
     // console.log(JSON.stringify(adGroups[1], null, 2))
 
+    const allRows = []
     allWeekTotals.forEach(data => {
-      const row = []
+      const row = {
+        adGroup: data.adGroup
+      }
       const weekData = adGroups[data.adGroup]
       allWeeks.forEach(week => {
-        row.push(week)
         if (weekData[week]) {
-          row.push(
-            weekData[week].users,
-            weekData[week].clicks,
-            weekData[week].signups,
-            weekData[week].cost
-          )
+          row[`${week}_us`] = weekData[week].users
+          row[`${week}_cl`] = weekData[week].clicks
+          row[`${week}_si`] = weekData[week].signups
+          row[`${week}_co`] = weekData[week].cost
+          row[`${week}_cps`] = weekData[week].signups
+            ? (weekData[week].cost / weekData[week].signups).toFixed(2)
+            : 0
         } else {
-          row.push(0, 0, 0, 0)
+          row[`${week}_us`] = 0
+          row[`${week}_cl`] = 0
+          row[`${week}_si`] = 0
+          row[`${week}_co`] = 0
+          row[`${week}_cps`] = 0
         }
       })
-      console.log(
-        StringUtil.padString(data.adGroup, 30),
-        row.map(x => StringUtil.padString(x, 6)).join(' ')
-      )
+      allRows.push(row)
     })
 
+    // Remove inactive AdGroups.
+    const thisWeekCost = `${allWeeks[0]}_co`
+    const lastWeekCost = `${allWeeks[1]}_co`
+    const activeGroups = allRows.filter(x => {
+      return x[thisWeekCost] > 0 && x[lastWeekCost] > 0
+    })
+    const somewhatActiveGroups = allRows.filter(x => {
+      return (
+        (x[thisWeekCost] > 0 && x[lastWeekCost] === 0) ||
+        (x[thisWeekCost] === 0 && x[lastWeekCost] > 0)
+      )
+    })
+    const inactiveGroups = allRows.filter(x => {
+      return x[thisWeekCost] === 0 && x[lastWeekCost] === 0
+    })
+
+    console.log(`Found ${allRows.length} total rows.`)
+    console.log(`Found ${activeGroups.length} active groups.`)
+    console.log(`Found ${inactiveGroups.length} inactive groups.`)
+    console.log(`Found ${somewhatActiveGroups.length} somewhat active groups.`)
+    // console.log(JSON.stringify(report, null, 2))
+
+    let html = Fs.readFileSync(Path.join(__dirname, 'weekly-layout.html'), 'utf8')
+
+    // let headers = false
+    const fields = Object.keys(activeGroups[0])
+    let tableRows = activeGroups.concat(somewhatActiveGroups, inactiveGroups).map(x => {
+      return fields.reduce((acc, field) => {
+        acc.push(`<td>${x[field]}</td>`)
+        return acc
+      }, []).join('')
+    })
+    const cols = [ ...new Array(fields.length) ].map(() => '<col>').join('')
+    const table = `
+    <table>
+      ${cols}
+      <tr>${tableRows.join('</tr><tr>')}</tr>
+    </table>
+    `
+
+    html = html
+    .replace(
+      '<div class="container-fluid"></div>',
+      '<div class="container-fluid">' + table + '</div>'
+    )
+    Fs.writeFileSync('/tmp/test.html', html)
+
+    return Util.writeCsv(
+      activeGroups.concat(somewhatActiveGroups, inactiveGroups),
+      '/tmp/adgroups-per-week.csv'
+    )
+  })
+  .then(() => {
     if (process.argv[2] === 'upload') {
+      console.log('Uploading report to S3 ..')
       S3.uploadToS3(S3.createItem('test.html'))
       .then(res => {
         console.log('res=', res)

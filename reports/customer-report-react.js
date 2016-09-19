@@ -96,7 +96,7 @@ function getAveragePurchaseTimeInDays () {
 }
 
 class App extends React.Component {
-  renderTable (title, report) {
+  renderTable (title, report, opts = { }) {
     return (
       <div>
         <h1>{title}</h1>
@@ -109,7 +109,7 @@ class App extends React.Component {
               <th>Owner Name</th>
               <th>Owner Email</th>
               <th>Subscription</th>
-              <th>Start Date</th>
+              <th>{opts.dateTitle ? opts.dateTitle : 'Start Date'}</th>
               <th>Payment Type</th>
               <th>Licenses</th>
               <th>Billing Cycle</th>
@@ -121,15 +121,32 @@ class App extends React.Component {
           </thead>
           <tbody>
             {report.map((x, i) => (
-              <ReportRow key={i} row={x} remaining={report.length - i} />
+              <ReportRow
+                key={i}
+                row={x}
+                remaining={report.length - i}
+                opts={opts}
+              />
             ))}
           </tbody>
         </table>
       </div>
     )
   }
+
   render () {
     const { report, churn } = this.props
+
+    const churnedCustomersReport = report
+    .filter(x => x.subscription !== 'premium')
+    .map(x => {
+      const copy = { ...x }
+      copy.secondaryDate = moment(x.subscriptionEndDate, 'YYYY-MM-DD')
+      return copy
+    })
+    // Resort on secondaryDate desc.
+    churnedCustomersReport.sort((a, b) => a.secondaryDate < b.secondaryDate ? 1 : -1)
+
     return (
       <div className='tw-report'>
         <div className='inner'>
@@ -192,7 +209,8 @@ class App extends React.Component {
 
           {this.renderTable(
             'Churned Customers',
-            report.filter(x => x.subscription !== 'premium')
+            churnedCustomersReport,
+            { dateTitle: 'Lockout Date' }
           )}
         </div>
       </div>
@@ -205,7 +223,10 @@ App.propTypes = {
   churn: React.PropTypes.array.isRequired
 }
 
-const ReportRow = ({ row, remaining }) => {
+const ReportRow = ({ row, remaining, opts }) => {
+  let isBeforeToday = moment(row.subscriptionStartDate).isBefore(
+    moment().startOf('day')
+  )
   const isWithinToday = moment(row.subscriptionStartDate).isAfter(
     moment().startOf('day')
   )
@@ -213,11 +234,24 @@ const ReportRow = ({ row, remaining }) => {
     moment().subtract(2, 'days').startOf('day')
   )
 
+  if (row.secondaryDate) {
+    isBeforeToday = row.secondaryDate.isBefore(moment().startOf('day'))
+  }
+
+  // if (row.ownerEmail === 'ath.angelakis@gmail.com') {
+  //   console.log('row:', row)
+  //   console.log('isBeforeToday:', isBeforeToday)
+  //   console.log('opts.secondaryDate:', opts.secondaryDate.)
+  // }
+  //
   const newCls = classNames({
     'nowrap': true,
     'row-green': isWithinToday,
-    'row-amber': !isWithinToday && isWithin48Hours,
-    'row-red': row.subscription === 'canceled'
+    'row-amber': (
+      (!isWithinToday && isWithin48Hours) ||
+      (row.subscription === 'canceled' && !isBeforeToday)
+    ),
+    'row-red': row.subscription === 'canceled' && isBeforeToday
   })
 
   return (
@@ -231,7 +265,12 @@ const ReportRow = ({ row, remaining }) => {
         <div>{row.subscription}</div>
         <div className='details'>{row.membershipDays} days</div>
       </td>
-      <td className={newCls}>{moment(row.subscriptionStartDate).format('YYYY-MM-DD')}</td>
+      <td className={newCls}>
+        {row.secondaryDate
+          ? row.secondaryDate.format('YYYY-MM-DD')
+          : moment(row.subscriptionStartDate).format('YYYY-MM-DD')
+        }
+      </td>
       <td>{row.paymentType}</td>
       <td className={newCls}>{row.licenses}</td>
       <td className={newCls}>{row.billingCycle}</td>
