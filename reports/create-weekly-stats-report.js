@@ -20,6 +20,138 @@ function createWeek () {
   }
 }
 
+function getAdGroups (weeklyRows) {
+  return weeklyRows.reduce((acc, x) => {
+    const week = x['ga:year'] + x['ga:week']
+    const adGroup = x['ga:adGroup']
+    const source = x['ga:sourceMedium']
+
+    const users = parseInt(x['ga:users'], 10)
+    const clicks = parseInt(x['ga:adClicks'], 10)
+    const signups = parseInt(x['ga:goal7Completions'], 10)
+    const cost = parseFloat(x['ga:adCost'])
+
+    if (!acc[adGroup]) {
+      acc[adGroup] = { total: createWeek() }
+      acc[adGroup].total.adGroup = adGroup
+    }
+
+    if (!acc[adGroup][week]) {
+      acc[adGroup][week] = createWeek()
+    }
+
+    acc[adGroup][week].users += users
+    acc[adGroup][week].clicks += clicks
+    acc[adGroup][week].signups += signups
+    acc[adGroup][week].cost += cost
+
+    acc[adGroup].total.users += users
+    acc[adGroup].total.clicks += clicks
+    acc[adGroup].total.signups += signups
+    acc[adGroup].total.cost += cost
+
+    return acc
+  }, { })
+}
+
+function getTableRows (allWeeks, allWeekTotals, adGroups) {
+  const rows = []
+  allWeekTotals.forEach(data => {
+    const row = {
+      adGroup: data.adGroup
+    }
+    const weekData = adGroups[data.adGroup]
+    allWeeks.forEach(week => {
+      if (weekData[week]) {
+        row[`${week}_us`] = weekData[week].users
+        row[`${week}_cl`] = weekData[week].clicks
+        row[`${week}_si`] = weekData[week].signups
+        row[`${week}_co`] = weekData[week].cost
+        row[`${week}_cps`] = weekData[week].signups
+          ? Math.round(weekData[week].cost / weekData[week].signups)
+          : 0
+        row[`${week}_c2s`] = weekData[week].clicks
+          ? Math.round(weekData[week].signups / weekData[week].clicks * 100)
+          : 0
+      } else {
+        row[`${week}_us`] = 0
+        row[`${week}_cl`] = 0
+        row[`${week}_si`] = 0
+        row[`${week}_co`] = 0
+        row[`${week}_cps`] = 0
+        row[`${week}_c2s`] = 0
+      }
+    })
+    rows.push(row)
+  })
+  return rows
+}
+
+function getWeekStats (allWeeks, allRows) {
+  return allWeeks.reduce((weekStats, week) => {
+    let rowCount = 0
+
+    // Calculate means / averages.
+    let stats = allRows.reduce((acc, x) => {
+      if (x[`${week}_co`]) {
+        acc.clicksAvg += x[`${week}_cl`]
+        acc.signupsAvg += x[`${week}_si`]
+        acc.costAvg += x[`${week}_co`]
+        ++rowCount
+      }
+      return acc
+    }, {
+      clicksAvg: 0,
+      signupsAvg: 0,
+      costAvg: 0,
+      clicksSd: 0,
+      signupsSd: 0,
+      costSd: 0
+
+    })
+    stats.clicksAvg /= rowCount
+    stats.signupsAvg /= rowCount
+    stats.costAvg /= rowCount
+
+    // Calculate standard diviations.
+    rowCount = 0
+    stats = allRows.reduce((acc, x) => {
+      if (x[`${week}_co`]) {
+        const clicksSd = x[`${week}_cl`] - stats.clicksAvg
+        const signupsSd = x[`${week}_cl`] - stats.signupsAvg
+        const costSd = x[`${week}_cl`] - stats.costAvg
+        acc.clicksSd += (clicksSd * clicksSd)
+        acc.signupsSd += (signupsSd * signupsSd)
+        acc.costSd += (costSd * costSd)
+        ++rowCount
+      }
+      return acc
+    }, stats)
+    stats.clicksSd = Math.sqrt(stats.clicksSd / rowCount)
+    stats.signupsSd = Math.sqrt(stats.signupsSd / rowCount)
+    stats.costSd = Math.sqrt(stats.costSd / rowCount)
+
+    weekStats[week] = stats
+    return weekStats
+  }, { })
+}
+
+function getScoredRows (allWeeks, weekStats, allRows) {
+  return allRows.map(row => {
+    const scoredWeeks = allWeeks.map(week => {
+      return (
+        ((row[`${week}_cl`] - weekStats[week].clicksAvg) / weekStats[week].clicksSd) +
+        ((row[`${week}_si`] - weekStats[week].signupsAvg) / weekStats[week].signupsSd) +
+        ((row[`${week}_co`] - weekStats[week].costAvg) / weekStats[week].costSd)
+      )
+    })
+    return [
+      row.adGroup,
+      ...scoredWeeks
+    ]
+  })
+}
+
 function renderTaskworldReport (weeklyCsvFile) {
   Util.readCsv(weeklyCsvFile)
   .then(weeklyRows => {
@@ -33,37 +165,7 @@ function renderTaskworldReport (weeklyCsvFile) {
     allWeeks.sort((a, b) => a < b ? 1 : -1)
     console.log(JSON.stringify(allWeeks, null, 2))
 
-    const adGroups = weeklyRows.reduce((acc, x) => {
-      const week = x['ga:year'] + x['ga:week']
-      const adGroup = x['ga:adGroup']
-      const source = x['ga:sourceMedium']
-
-      const users = parseInt(x['ga:users'], 10)
-      const clicks = parseInt(x['ga:adClicks'], 10)
-      const signups = parseInt(x['ga:goal7Completions'], 10)
-      const cost = parseFloat(x['ga:adCost'])
-
-      if (!acc[adGroup]) {
-        acc[adGroup] = { total: createWeek() }
-        acc[adGroup].total.adGroup = adGroup
-      }
-
-      if (!acc[adGroup][week]) {
-        acc[adGroup][week] = createWeek()
-      }
-
-      acc[adGroup][week].users += users
-      acc[adGroup][week].clicks += clicks
-      acc[adGroup][week].signups += signups
-      acc[adGroup][week].cost += cost
-
-      acc[adGroup].total.users += users
-      acc[adGroup].total.clicks += clicks
-      acc[adGroup].total.signups += signups
-      acc[adGroup].total.cost += cost
-
-      return acc
-    }, { })
+    const adGroups = getAdGroups(weeklyRows)
 
     const allWeekTotals = Object.keys(adGroups).reduce((acc, x) => {
       acc.push(adGroups[x].total)
@@ -86,31 +188,10 @@ function renderTaskworldReport (weeklyCsvFile) {
     console.log(JSON.stringify(allWeekTotals.slice(0, 5), null, 2))
     // console.log(JSON.stringify(adGroups[1], null, 2))
 
-    const allRows = []
-    allWeekTotals.forEach(data => {
-      const row = {
-        adGroup: data.adGroup
-      }
-      const weekData = adGroups[data.adGroup]
-      allWeeks.forEach(week => {
-        if (weekData[week]) {
-          row[`${week}_us`] = weekData[week].users
-          row[`${week}_cl`] = weekData[week].clicks
-          row[`${week}_si`] = weekData[week].signups
-          row[`${week}_co`] = weekData[week].cost
-          row[`${week}_cps`] = weekData[week].signups
-            ? (weekData[week].cost / weekData[week].signups).toFixed(2)
-            : 0
-        } else {
-          row[`${week}_us`] = 0
-          row[`${week}_cl`] = 0
-          row[`${week}_si`] = 0
-          row[`${week}_co`] = 0
-          row[`${week}_cps`] = 0
-        }
-      })
-      allRows.push(row)
-    })
+    const allRows = getTableRows(allWeeks, allWeekTotals, adGroups)
+    const weekStats = getWeekStats(allWeeks, allRows)
+    const scoredRows = getScoredRows(allWeeks, weekStats, allRows)
+    console.log(JSON.stringify(scoredRows, null, 2))
 
     // Remove inactive AdGroups.
     const thisWeekCost = `${allWeeks[0]}_co`
@@ -138,7 +219,7 @@ function renderTaskworldReport (weeklyCsvFile) {
 
     // let headers = false
     const fields = Object.keys(activeGroups[0])
-    let tableRows = activeGroups.concat(somewhatActiveGroups, inactiveGroups).map(x => {
+    let tableRows = activeGroups.concat(somewhatActiveGroups).map(x => {
       return fields.reduce((acc, field) => {
         acc.push(`<td>${x[field]}</td>`)
         return acc
