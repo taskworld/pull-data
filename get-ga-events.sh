@@ -7,5 +7,5 @@ node google.js \
  --metrics ga:totalEvents \
  --sortby ga:date,ga:eventAction \
  --order DESC,ASC \
- --filter ga:eventAction,IN_LIST,page:project:kanban:create-task,page:projects:click:open:noti-center \
+ --filter ga:eventLabel,BEGINS_WITH,UID:5567cf05870e405f53cdc5a8: \
  --name ga-events
