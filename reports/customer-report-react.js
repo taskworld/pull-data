@@ -4,97 +4,6 @@
 */
 'use strict'
 
-function range (num) {
-  return [ ...new Array(num) ].map((x, i) => i)
-}
-
-function getTotalLicenses () {
-  return reportData
-  .filter((x) => x.subscription === 'premium')
-  .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
-}
-
-function getChurnRates () {
-  let startMonth = moment().subtract(4, 'months')
-  if (startMonth.isBefore(moment('2016-05-01'))) {
-    startMonth = moment('2016-05-01')
-  }
-  return getChurnRatePerMonth(startMonth, 4)
-}
-
-function getLicensesAfter (date) {
-  return reportData
-  .filter((x) => x.subscription === 'premium')
-  .filter((x) => moment(x.subscriptionStartDate).isAfter(date))
-  .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
-}
-
-function getChurnRatePerMonth (startMonth, numMonths) {
-  console.log('Starting from month:', startMonth.format())
-  return range(numMonths + 1).map((month) => {
-    const start = startMonth.clone()
-    .add(month, 'months')
-    .startOf('month')
-    const end = start.clone().endOf('month')
-    const churn = getChurnRateForPeriod(start, end)
-
-    return {
-      start,
-      end,
-      endOfLastPeriod: start.clone().subtract(1, 'second'),
-      churnRate: churn.churnRate,
-      newInPeriod: churn.newInPeriod,
-      accumulatedBeforePeriod: churn.accumulatedBeforePeriod
-    }
-  })
-}
-
-function getChurnRateForPeriod (startDate, endDate) {
-  const accumulatedBeforePeriod = reportData
-  .filter((x) => x.subscription === 'premium')
-  .filter((x) => moment(x.subscriptionStartDate).isBefore(startDate))
-  .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
-
-  const newInPeriod = reportData
-  .filter((x) => x.subscription === 'premium')
-  .filter((x) => moment(x.subscriptionStartDate).isBetween(startDate, endDate))
-  .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
-
-  const churned = reportData
-  .filter((x) => x.subscription === 'canceled')
-  .filter((x) => moment(x.subscriptionEndDate).isBetween(startDate, endDate))
-  .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
-
-  console.log(
-    `Churn rate in period ${startDate.format()} - ${endDate.format()}: ` +
-    `${churned} churned / ${accumulatedBeforePeriod} acculmulated licenses before period.`
-  )
-  return {
-    churned,
-    newInPeriod,
-    accumulatedBeforePeriod,
-    churnRate: accumulatedBeforePeriod ? (churned / accumulatedBeforePeriod * 100) : 0
-  }
-}
-
-function getAveragePurchaseTimeInDays () {
-  const rows = reportData
-  .filter((x) => x.subscription === 'premium')
-  .filter((x) => (
-    moment(x.subscriptionStartDate).isAfter(moment('2016-05-01')) &&
-    moment(x.workspaceCreatedDate).isAfter(moment('2016-05-01'))
-  ))
-
-  return rows
-  .reduce((acc, x) => {
-    const startDate = moment(x.workspaceCreatedDate)
-    const endDate = moment(x.subscriptionStartDate)
-    const duration = moment.duration(endDate.diff(startDate))
-    const days = duration.asDays()
-    return acc + days
-  }, 0) / rows.length
-}
-
 class App extends React.Component {
   renderTable (title, report, opts = { }) {
     return (
@@ -134,10 +43,78 @@ class App extends React.Component {
     )
   }
 
-  render () {
-    const { report, churn } = this.props
+  renderOverallStats (report) {
+    return (
+      <div style={{ width: 350 }}>
+        <table className='table table-hover table-bordered'>
+          <tbody>
+            <tr>
+              <td>Licenses this Week:</td>
+              <td className='percentage'>{report.licensesThisWeek}</td>
+            </tr>
+            <tr>
+              <td>Licenses in {moment().format('MMM YYYY')}:</td>
+              <td className='percentage'>{report.licensesThisMonth}</td>
+            </tr>
+            <tr>
+              <td>Total Active Licenses:</td>
+              <td className='percentage'>{report.licensesTotal}</td>
+            </tr>
+            <tr>
+              <td>Average Days from Trial to Purchase:</td>
+              <td className='percentage'>{report.averagePurchaseTimeDays}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    )
+  }
 
-    const churnedCustomersReport = report
+  renderMonthlyStats (report) {
+    return (
+      <div style={{ width: 800 }}>
+        <table className='table table-hover table-bordered'>
+          <thead>
+            <tr>
+              <th>&nbsp;</th>
+              {report.monthly.map((x, i) => (<th>{x.end}</th>))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Churn Rate:</td>
+              {report.monthly.map((x, i) => (
+                <td className='percentage'>
+                  {x.churnRate}% ({x.churnRateOptimistic}%)
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <td>New Licenses:</td>
+              {report.monthly.map((x, i) => (
+                <td className='percentage' key={i}>
+                  {x.licensesInPeriod}
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <td>Total Licenses Before Period:</td>
+              {report.monthly.map((x, i) => (
+                <td className='percentage' key={i}>
+                  {x.licensesBeforePeriod}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  render () {
+    const { data } = this.props
+
+    const churnedCustomersReport = data.rows
     .filter(x => x.subscription !== 'premium')
     .map(x => {
       const copy = { ...x }
@@ -150,62 +127,17 @@ class App extends React.Component {
     return (
       <div className='tw-report'>
         <div className='inner'>
-          <table className='stats'>
-            <tr>
-              <td>Licenses this Week:</td>
-              <td>{getLicensesAfter(moment().startOf('week'))}</td>
-            </tr>
-            <tr>
-              <td>Licenses in {moment().format('MMM YYYY')}:</td>
-              <td>{getLicensesAfter(moment().startOf('month'))}</td>
-            </tr>
-            <tr>
-              <td>Total Active Licenses:</td>
-              <td>{getTotalLicenses()}</td>
-            </tr>
-            <tr>
-              <td>Average Days from Trial to Purchase:</td>
-              <td>{getAveragePurchaseTimeInDays().toFixed(2)}</td>
-            </tr>
-            <tr>
-              <td>Churn Rate:</td>
-              <td>
-                {churn.map((x, i) => (
-                  <span className='percentage'>
-                    <span className='month'>{x.start.format('MMM')}:</span>
-                    {x.churnRate.toFixed(2)}%
-                  </span>
-                ))}
-              </td>
-            </tr>
-            <tr>
-              <td>New Licenses per Month:</td>
-              <td>{churn.map((x, i) => (
-                <span className='percentage' key={i}>
-                  <span className='month'>{x.start.format('MMM')}:</span>
-                  {x.newInPeriod}
-                </span>
-              ))}</td>
-            </tr>
-            <tr>
-              <td>Accumulated Licenses:</td>
-              <td>{churn.map((x, i) => (
-                <span className='percentage' key={i}>
-                  <span className='month'>{x.endOfLastPeriod.format('MMM')}:</span>
-                  {x.accumulatedBeforePeriod}
-                </span>
-              ))}</td>
-            </tr>
-          </table>
+          {this.renderOverallStats(data.report)}
+          {this.renderMonthlyStats(data.report)}
 
-          <hr/>
+          <br/>
 
           {this.renderTable(
             'Active Customers',
-            report.filter(x => x.subscription === 'premium')
+            data.rows.filter(x => x.subscription === 'premium')
           )}
 
-          <hr/>
+          <br/>
 
           {this.renderTable(
             'Churned Customers',
@@ -219,8 +151,7 @@ class App extends React.Component {
 }
 
 App.propTypes = {
-  report: React.PropTypes.array.isRequired,
-  churn: React.PropTypes.array.isRequired
+  data: React.PropTypes.object.isRequired
 }
 
 const ReportRow = ({ row, remaining, opts }) => {
@@ -238,12 +169,6 @@ const ReportRow = ({ row, remaining, opts }) => {
     isBeforeToday = row.secondaryDate.isBefore(moment().startOf('day'))
   }
 
-  // if (row.ownerEmail === 'ath.angelakis@gmail.com') {
-  //   console.log('row:', row)
-  //   console.log('isBeforeToday:', isBeforeToday)
-  //   console.log('opts.secondaryDate:', opts.secondaryDate.)
-  // }
-  //
   const newCls = classNames({
     'nowrap': true,
     'row-green': isWithinToday,
@@ -283,6 +208,6 @@ const ReportRow = ({ row, remaining, opts }) => {
 }
 
 ReactDOM.render(
-  <App report={reportData} churn={getChurnRates()} />,
+  <App data={reportData} />,
   document.getElementById('react-app')
 )
