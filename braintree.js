@@ -34,6 +34,51 @@ function getGateway () {
   })
 }
 
+function getTransactionRow (t) {
+  return {
+    status: t.status,
+    name: `${t.customer.firstName} ${t.customer.lastName}`,
+    email: t.customer.email,
+    amount: t.amount,
+    currency: t.currencyIsoCode,
+    createdAt: t.createdAt,
+    planId: t.planId,
+    subscriptionId: t.subscriptionId,
+    billingPeriodStartDate: t.subscription.billingPeriodStartDate,
+    billingPeriodEndDate: t.subscription.billingPeriodEndDate,
+    paymentInstrumentType: t.paymentInstrumentType,
+    paypalEmail: t.paypal && t.paypal.payerEmail || null
+  }
+}
+
+const transactionFields = ('id,workspaceId,status,type,currencyIsoCode,amount,orderId,createdAt,updatedAt,customer,billing,refundId,' +
+                           'shipping,customFields,cvvResponseCode,gatewayRejectionReason,processorAuthorizationCode,processorResponseCode,' +
+                           'processorResponseText,additionalProcessorResponse,voiceReferralNumber,purchaseOrderNumber,taxAmount,taxExempt,' +
+                           'creditCard,statusHistory,planId,subscriptionId,subscription,addOns,discounts,descriptor,recurring,channel,' +
+                           'serviceFeeAmount,escrowStatus,disbursementDetails,disputes,paymentInstrumentType,processorSettlementResponseCode,' +
+                           'processorSettlementResponseText,threeDSecureInfo,paypalAccount,coinbaseAccount,applePayCard,androidPayCard').split(',')
+
+function getTransactionRowFull (t) {
+  return transactionFields.reduce((acc, x) => {
+    acc[x] = serializeObject(t[x], true)
+    return acc
+  }, { })
+}
+
+function serializeObject (obj, skipUndefined = false) {
+  if (obj != null && typeof obj === 'object') {
+    return Object.keys(obj).reduce((acc, x) => {
+      if (skipUndefined && obj[x] == null) {
+        return acc
+      }
+      const value = serializeObject(obj[x], skipUndefined)
+      acc.push(`${x}=${value}`)
+      return acc
+    }, []).join(';')
+  }
+  return obj
+}
+
 function getTransactions (fromDate) {
   console.log('Fetching transactions since', fromDate.format())
 
@@ -47,19 +92,16 @@ function getTransactions (fromDate) {
 
   stream.on('data', (t) => {
     ++count
-    const row = {
-      status: t.status,
-      name: `${t.customer.firstName} ${t.customer.lastName}`,
-      email: t.customer.email,
-      amount: t.amount,
-      currency: t.currencyIsoCode,
-      createdAt: t.createdAt,
-      planId: t.planId,
-      subscriptionId: t.subscriptionId,
-      billingPeriodStartDate: t.subscription.billingPeriodStartDate,
-      billingPeriodEndDate: t.subscription.billingPeriodEndDate,
-      paymentInstrumentType: t.paymentInstrumentType,
-      paypalEmail: t.paypal && t.paypal.payerEmail || null
+
+    if (t.customer && t.customer.id) {
+      t.workspaceId = t.customer.id
+    }
+
+    let row
+    if (true) {
+      row = getTransactionRowFull(t)
+    } else {
+      row = getTransactionRow(t)
     }
     rows.push(row)
 

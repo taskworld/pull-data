@@ -7,5 +7,5 @@ node google.js \
  --metrics ga:totalEvents \
  --sortby ga:date \
  --order DESC \
- --filter ga:eventAction,EXACT,Completed-SignUp \
+ --filter 'ga:eventAction,IN_LIST,Completed-SignUp,Press Signup' \
  --name adword-signups
