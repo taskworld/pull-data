@@ -72,7 +72,7 @@ class App extends React.Component {
 
   renderMonthlyStats (report) {
     return (
-      <div style={{ width: 800 }}>
+      <div style={{ width: 1000 }}>
         <table className='table table-hover table-bordered'>
           <thead>
             <tr>
@@ -85,12 +85,41 @@ class App extends React.Component {
               <td>Churn Rate:</td>
               {report.monthly.map((x, i) => (
                 <td className='percentage'>
-                  {x.churnRate}% ({x.churnRateOptimistic}%)
+                  {x.churnRate}%
                 </td>
               ))}
             </tr>
             <tr>
-              <td>New Licenses:</td>
+              <td>Churned Licenses:</td>
+              {report.monthly.map((x, i) => (
+                <td className='percentage'>
+                  {x.churnedLicensesInPeriod}
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <td>
+                <div>Churn Rate (Real Customers):</div>
+                <div className='details'>
+                  Customers who have been with us more than 45 days.
+                </div>
+              </td>
+              {report.monthly.map((x, i) => (
+                <td className='percentage'>
+                  {x.churnRateOptimistic}%
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <td>Churned Licenses (Real Customers):</td>
+              {report.monthly.map((x, i) => (
+                <td className='percentage'>
+                  {x.churnedLicensesFromRealCustomersInPeriod}
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <td>New Licenses Sold In Period:</td>
               {report.monthly.map((x, i) => (
                 <td className='percentage' key={i}>
                   {x.licensesInPeriod}
@@ -98,7 +127,7 @@ class App extends React.Component {
               ))}
             </tr>
             <tr>
-              <td>Total Licenses Before Period:</td>
+              <td>Total Licenses Active Before Period:</td>
               {report.monthly.map((x, i) => (
                 <td className='percentage' key={i}>
                   {x.licensesBeforePeriod}
