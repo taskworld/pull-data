@@ -54,7 +54,7 @@ function renderAdStatsReport () {
       const month = x['ga:year'] + x['ga:month']
       const cost = parseFloat(x['ga:adCost'])
       const clicks = parseInt(x['ga:adClicks'], 10)
-      const signups = parseInt(x['ga:goal7Completions'], 10)
+      const signups = parseInt(x['ga:goal7Completions'], 10) + parseInt(x['ga:goal9Completions'], 10)
       const users = parseInt(x['ga:users'], 10)
 
       if (!acc.month[month]) {
@@ -76,7 +76,7 @@ function renderAdStatsReport () {
       const group = x['ga:adGroup']
       const cost = parseFloat(x['ga:adCost'])
       const clicks = parseInt(x['ga:adClicks'], 10)
-      const signups = parseInt(x['ga:goal7Completions'], 10)
+      const signups = parseInt(x['ga:goal7Completions'], 10) + parseInt(x['ga:goal9Completions'], 10)
       const users = parseInt(x['ga:users'], 10)
       if (!acc.adGroup[group]) {
         acc.adGroup[group] = createStatsEntry()
