@@ -1,26 +1,44 @@
 'use strict'
 
+const Assert = require('assert')
 const P = require('bluebird')
 const Moment = require('moment')
 const Mongo = require('./mongodb')
-const Util = require('./util')
+
 const Fs = require('fs')
 P.promisifyAll(Fs)
 
-const MAX_DOCS = 250000
+const MONGO_URL = 'mongodb://admin:open@localhost/taskworld_enterprise_us?authSource=admin'
 
-const Argv = require('minimist')(process.argv.slice(2))
-if (Argv.from) {
-  run(Argv)
-} else {
+run()
+
+function run () {
+  return P.try(() => Mongo.connect(MONGO_URL))
+  .then(() => {
+    const args = require('minimist')(process.argv.slice(2))
+    const command = args.export || args['some-other-command'] || 'export'
+
+    switch (command) {
+      case 'export':
+        Assert(args.from, '--from')
+        return exportDataFromMongoDb(Moment(args.from))
+      default:
+        printUsage()
+    }
+  })
+  .catch(Assert.AssertionError, reason => {
+    console.error(`\nMissing required argument ${reason.message}`)
+    printUsage()
+  })
+  .catch(reason => console.error('Error:', reason))
+  .finally(Mongo.close)
+}
+
+function printUsage () {
   console.log(`
   Usage: node export-tw-data.js
     --from      From date, e.g. 2016-07-01
   `)
-}
-
-function run (args) {
-  exportDataFromMongoDb(Moment(args.from))
 }
 
 function exportDataFromMongoDb (startDate) {
@@ -29,25 +47,49 @@ function exportDataFromMongoDb (startDate) {
   Start Date: ${startDate.format()}
   `)
 
-  return Mongo.query(exportRecentlyUpdated, { startDate })
-  .then(Mongo.close)
-  .catch((err) => console.error(err))
+  return Mongo
+  .query(exportRecentlyUpdated, { startDate })
 }
 
-function getRecentlyUpdatedResources (db, startDate) {
+function * findStartAuditIdByStartDate (db, opts) {
+  let max = 100
+  let found = false
+  let lastId = null
+
+  while (!found && max--) {
+    const where = { }
+    if (lastId) where._id = { $lt: lastId }
+    const [doc] = yield db.collection('audits')
+    .find(where).sort({ _id: -1 }).limit(1).skip(50000).toArray()
+    lastId = doc._id
+
+    const created = Moment(doc.created)
+    found = created.isBefore(opts.startDate)
+    console.log('At audit date:', created.format('YYYY-MM-DD'))
+  }
+
+  console.log('Starting at audit id:', lastId.toString())
+  return lastId
+}
+
+function getRecentlyUpdatedResources (db, fromAuditId) {
   const $match = {
-    created: {
-      $gte: startDate.toDate(),
-      $lt: startDate.clone().add(1, 'day').toDate()
-    }
+    _id: { $gte: fromAuditId },
+    event: { $nin: ['task:get-accessible-tasks'] }
   }
-  const $project = { event: 1, space_id: 1, r1: 1, owner_id: 1, created: 1 }
+  const $project = { event: 1, space_id: 1, r1: 1, owner_id: 1 }
   const $group = {
-    _id: { space_id: '$space_id', owner_id: '$owner_id' },
-    event_count: { $sum: 1 },
-    events: { $addToSet: '$event' }
+    _id: {
+      owner_id: '$owner_id',
+      event: '$event',
+      ref: '$r1'
+    },
+    event_count: { $sum: 1 }
   }
-  const $sort = { event_count: -1 }
+  const $sort = {
+    '_id.owner_id': 1,
+    event_count: -1
+  }
 
   return db.collection('audits')
   .aggregate([
@@ -60,13 +102,32 @@ function getRecentlyUpdatedResources (db, startDate) {
 }
 
 function * exportRecentlyUpdated (db, opts) {
-  const audits = yield getRecentlyUpdatedResources(db, opts.startDate)
-  console.log('Audits:', audits)
-  return
+  const auditId = yield * findStartAuditIdByStartDate(db, opts.startDate)
+  const audits = yield getRecentlyUpdatedResources(db, auditId)
+  console.log('Audits:')
+  console.log(audits.slice(0, 3))
 
-  const exportFileName = `/tmp/tw-export.csv`
-  console.log(`Creating ${exportFileName} with ${audits.length} rows ..`)
+  const reportStep1 = audits.map(x => Object.assign({ count: x.event_count }, x._id))
+  const reportStep2 = reportStep1.reduce((acc, x) => {
+    if (!acc[x.owner_id]) {
+      acc[x.owner_id] = {
+        events: { }
+      }
+    }
+    if (!acc[x.owner_id].events[x.event]) {
+      acc[x.owner_id].events[x.event] = { }
+    }
+    if (x.ref) {
+      acc[x.owner_id].events[x.event][x.ref] = x.count
+    } else {
+      acc[x.owner_id].events[x.event] = x.count
+    }
+    return acc
+  }, { })
 
-  // Dump to CSV.
-  yield Util.writeCsv(audits, exportFileName)
+  const filename = `/tmp/tw-audit-data.json`
+  console.log(`Creating ${filename} containing ${Object.keys(reportStep2).length} objects ..`)
+
+  // Dump to JSON.
+  Fs.writeFileSync(filename, JSON.stringify(reportStep2, null, 2))
 }
