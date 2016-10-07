@@ -80,11 +80,13 @@ function getRecentlyUpdatedResources (db, fromAuditId) {
   const $project = { event: 1, space_id: 1, r1: 1, owner_id: 1 }
   const $group = {
     _id: {
+      space_id: '$space_id',
       owner_id: '$owner_id',
       event: '$event',
       ref: '$r1'
     },
-    event_count: { $sum: 1 }
+    event_count: { $sum: 1 },
+    spaces: { $addToSet: '$space_id' }
   }
   const $sort = {
     '_id.owner_id': 1,
@@ -107,10 +109,14 @@ function * exportRecentlyUpdated (db, opts) {
   console.log('Audits:')
   console.log(audits.slice(0, 3))
 
-  const reportStep1 = audits.map(x => Object.assign({ count: x.event_count }, x._id))
+  const reportStep1 = audits.map(x => Object.assign({
+    count: x.event_count,
+    spaces: x.spaces
+  }, x._id))
   const reportStep2 = reportStep1.reduce((acc, x) => {
     if (!acc[x.owner_id]) {
       acc[x.owner_id] = {
+        spaces: x.spaces,
         events: { }
       }
     }
