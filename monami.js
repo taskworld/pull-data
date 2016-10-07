@@ -4,53 +4,84 @@ const P = require('bluebird')
 const Fs = require('fs')
 const Path = require('path')
 const Exec = require('child_process').exec
+const Moment = require('moment')
 
-setTimeout(run, 2500)
+const args = process.argv.slice(2)
+const RUN_INTERVAL_MS = 5000
+const CPU_PERCENTAGE_THRESHOLD = 25
+const MEMORY_PERCENTAGE_THRESHOLD = 10
+const REPORT_FILENAME = args[0] || '/tmp/performance-log.txt'
+console.log('Monami logging to:', REPORT_FILENAME)
+
+setTimeout(run, RUN_INTERVAL_MS / 2)
+
+const reportFields = [
+  'ts',
+  'cpuPer',
+  'memPer',
+  'memVirtual',
+  'memReal',
+  'command'
+]
+
+const runStats = {
+  runs: 0,
+  totalTime: 0
+}
+
+let _timer = null
+function timer () {
+  if (!_timer) {
+    _timer = process.hrtime()
+  } else {
+    const diff = process.hrtime(_timer)
+    const elapsed = (diff[0] * 1e9 + diff[1]) / 1000 / 1000 // Return milliseconds.
+    _timer = null
+    return elapsed
+  }
+}
 
 function run () {
-  console.log('Running monami:', new Date())
-
-  const fields = [
-    'ts',
-    'cpuPer',
-    'memPer',
-    'memVirtual',
-    'memReal',
-    'command'
-    // 'memVirtual2',
-    // 'memReal2',
-    // 'cpuPer2',
-    // 'memPer2'
-  ]
+  // console.log('Running monami at', new Date())
+  timer()
 
   return getPsStats()
   .then(psStats => {
-    // console.log('PS Stats:', psStats)
     // const fullStats = addTopStats(psStats)
 
     return Object.keys(psStats)
-    .filter(pid => psStats[pid].cpuPer > 0 || psStats[pid].memPer > 0)
-    .map(pid => {
-      const stats = psStats[pid]
-      return fields.map(x => stats[x]).join(`\t`)
-    })
+    .filter(pid => (
+      // Log anything above the cpu threshold.
+      (psStats[pid].cpuPer > CPU_PERCENTAGE_THRESHOLD) ||
+      // Log processes consuming lots of memory every 20th run.
+      (psStats[pid].memPer > MEMORY_PERCENTAGE_THRESHOLD && runStats.runs % 20 === 0)
+    ))
+    .map(pid => reportFields.map(x => psStats[pid][x]).join(`\t`))
   })
   .then(report => {
-    return new P((resolve, reject) => {
-      console.log(`Writing ${report.length} report rows.`)
-      const ws = Fs.createWriteStream('/tmp/performance-log.txt', { flags: 'a' })
-      ws.end(report.join(`\n`) + `\n`, err => {
-        if (err) {
-          console.error('Error:', err)
-          return reject(err)
-        }
-        resolve()
+    if (report.length) {
+      return new P((resolve, reject) => {
+        // console.log(`Writing ${report.length} report rows.`)
+        const ws = Fs.createWriteStream(REPORT_FILENAME, { flags: 'a' })
+        ws.end(report.join(`\n`) + `\n`, err => {
+          if (err) {
+            console.error('Error:', err)
+            return reject(err)
+          }
+          resolve()
+        })
       })
-    })
+    }
   })
   .finally(() => {
-    console.log('It’s a Done Deal.')
-    setTimeout(run, 5000)
+    // console.log('It’s a Done Deal.')
+    runStats.totalTime += timer()
+    if (runStats.runs % 20 === 0) {
+      const totalRuntime = Math.floor(runStats.totalTime).toLocaleString()
+      console.log(`Total run time: ${totalRuntime} ms.`)
+    }
+    runStats.runs++
+    setTimeout(run, RUN_INTERVAL_MS)
   })
 }
 
@@ -105,7 +136,7 @@ function getPsStats (file) {
     }
   })
   .then(psText => {
-    const ts = Date.now()
+    const ts = Moment().format('MMDDHHmmss')
     const psLines = psText.trim().split(/[\n\r]+/)
     return psLines.reduce((acc, x) => {
       if (x.indexOf('USER ') === 0) {
