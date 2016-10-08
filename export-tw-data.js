@@ -8,26 +8,34 @@ const Mongo = require('./mongodb')
 const Fs = require('fs')
 P.promisifyAll(Fs)
 
+const AUDITS_EXPORT_FILE = '/tmp/tw-audit-data.json'
 const MONGO_URL = 'mongodb://admin:open@localhost/taskworld_enterprise_us?authSource=admin'
 
 run()
+
+function assertFileExists (file) {
+  Assert.doesNotThrow(() => Fs.accessSync(file), `Missing required file ${file}`)
+}
 
 function run () {
   return P.try(() => Mongo.connect(MONGO_URL))
   .then(() => {
     const args = require('minimist')(process.argv.slice(2))
-    const command = args.export || args['some-other-command'] || 'export'
 
-    switch (command) {
-      case 'export':
-        Assert(args.from, '--from')
-        return exportDataFromMongoDb(Moment(args.from))
-      default:
-        printUsage()
+    if (args.export) {
+      Assert(args.from, 'Missing argument --from')
+      return exportDataFromMongoDb(Moment(args.from))
     }
+
+    if (args.process) {
+      assertFileExists(AUDITS_EXPORT_FILE)
+      return postProcessAuditsData(AUDITS_EXPORT_FILE)
+    }
+
+    printUsage()
   })
   .catch(Assert.AssertionError, reason => {
-    console.error(`\nMissing required argument ${reason.message}`)
+    console.error(`\n`, reason.message)
     printUsage()
   })
   .catch(reason => console.error('Error:', reason))
@@ -37,8 +45,92 @@ function run () {
 function printUsage () {
   console.log(`
   Usage: node export-tw-data.js
-    --from      From date, e.g. 2016-07-01
+    --export    Export audits data from Taskworld.
+      --from    From date, e.g. 2016-07-01
+
+    --process   Post-process exported audits data.
   `)
+}
+
+function postProcessAuditsData (auditsFile) {
+  console.log(`
+  Post processing exported audits data:
+  File: ${auditsFile}
+  `)
+
+  return Mongo
+  .query(getAuditsMetadata, { auditsFile })
+}
+
+function getRecentNonCompletedTasksForUser (db, user) {
+  const where = {
+    space_id: { $in: user.spaces },
+    owner_id: user._id.toString(),
+    is_deleted: false,
+    status: { $ne: 2 },
+    created: { $gte: Moment().subtract(90, 'days').toDate() }
+  }
+
+  console.log(`Fetching tasks from ${user.spaces.length} spaces for user ${user.email}.`)
+
+  return db.collection('tasks')
+  .find(where)
+  .project({ title: 1, created: 1, updated: 1 })
+  .sort({ _id: -1 })
+  .toArray()
+}
+
+function getAuditedTasksMap (userId, audits) {
+  const data = audits[userId]
+  return Object.keys(data.events).reduce((acc, x) => {
+    if (x.indexOf('task:') === 0) {
+      Object.assign(acc, data.events[x])
+    }
+    return acc
+  }, { })
+}
+
+function groupTasksByTouchedAndUntouched (tasks, auditedTasks) {
+  return tasks.reduce((acc, task) => {
+    const taskId = task._id.toString()
+    if (auditedTasks[taskId]) {
+      acc.touched[taskId] = task
+    } else {
+      acc.untouched[taskId] = task
+    }
+    return acc
+  }, { touched: { }, untouched: { } })
+}
+
+function * getAuditsMetadata (db, { auditsFile }) {
+  const audits = require(auditsFile)
+
+  const userIds = Object.keys(audits)
+  const users = yield db.collection('users').find({
+    _id: { $in: userIds.map(Mongo.getObjectId) }
+  })
+  .project({ spaces: 1, email: 1 })
+  .toArray()
+  console.log(`Found ${users.length} users.`)
+
+  // For each user, fetch owned resources and determine stuff that
+  // requires the user’s attention (i.e. that they follow up).
+  let max = 10
+  for (const user of users) {
+    const tasks = yield getRecentNonCompletedTasksForUser(db, user)
+    const auditedTasks = getAuditedTasksMap(user._id.toString(), audits)
+    const groupedTasks = groupTasksByTouchedAndUntouched(tasks, auditedTasks)
+
+    console.log(
+    `Found ${Object.keys(groupedTasks.touched).length} / ` +
+    `${Object.keys(groupedTasks.untouched).length} touched tasks ` +
+    `for user ${user.email}.`
+    )
+
+    if (!--max) {
+      break
+    }
+  }
 }
 
 function exportDataFromMongoDb (startDate) {
@@ -131,9 +223,8 @@ function * exportRecentlyUpdated (db, opts) {
     return acc
   }, { })
 
-  const filename = `/tmp/tw-audit-data.json`
-  console.log(`Creating ${filename} containing ${Object.keys(reportStep2).length} objects ..`)
+  console.log(`Creating ${AUDITS_EXPORT_FILE} containing ${Object.keys(reportStep2).length} objects ..`)
 
   // Dump to JSON.
-  Fs.writeFileSync(filename, JSON.stringify(reportStep2, null, 2))
+  Fs.writeFileSync(AUDITS_EXPORT_FILE, JSON.stringify(reportStep2, null, 2))
 }
