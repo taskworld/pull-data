@@ -80,7 +80,7 @@ function getRecentNonCompletedTasksForUser (db, user) {
   .toArray()
 }
 
-function getAuditedTasksMap (userId, audits) {
+function getAuditedTasksMapForUser (userId, audits) {
   const data = audits[userId]
   return Object.keys(data.events).reduce((acc, x) => {
     if (x.indexOf('task:') === 0) {
@@ -90,16 +90,79 @@ function getAuditedTasksMap (userId, audits) {
   }, { })
 }
 
-function groupTasksByTouchedAndUntouched (tasks, auditedTasks) {
+function getAuditedTasksMap (audits) {
+  return Object.keys(audits).reduce((acc, userId) => {
+    const data = audits[userId]
+    Object.keys(data.events).forEach(event => {
+      if (event.indexOf('task:') === 0) {
+        Object.keys(data.events[event]).forEach(taskId => {
+          if (!acc[taskId]) {
+            acc[taskId] = { }
+          }
+          if (!acc[taskId][userId]) {
+            acc[taskId][userId] = { }
+          }
+          acc[taskId][userId][event] = 1
+        })
+      }
+    })
+    return acc
+  }, { })
+}
+
+function groupTasksByTouchedAndUntouched (userId, tasks, userTasks, auditedTasksMap) {
   return tasks.reduce((acc, task) => {
     const taskId = task._id.toString()
-    if (auditedTasks[taskId]) {
-      acc.touched[taskId] = task
+
+    let isTouchedByOtherUser = false
+    if (auditedTasksMap[taskId]) {
+      const isTouchedByThisUser = !!auditedTasksMap[taskId][userId]
+      const isTouchedByAtLeastTwoUsers = Object.keys(auditedTasksMap[taskId]).length > 1
+      if (!isTouchedByThisUser || (isTouchedByThisUser && isTouchedByAtLeastTwoUsers)) {
+        isTouchedByOtherUser = true
+      }
+    }
+
+    if (userTasks[taskId]) {
+      acc.touched.push({ task, count: userTasks[taskId] })
+    } else if (isTouchedByOtherUser) {
+      acc.touchedByOthers.push({ task, userAudits: auditedTasksMap[taskId] })
     } else {
-      acc.untouched[taskId] = task
+      acc.untouched.push(task)
     }
     return acc
-  }, { touched: { }, untouched: { } })
+  }, { touched: [], untouched: [], touchedByOthers: [] })
+}
+
+function printTaskReport (user, groupedTasks, userMap) {
+  console.log(`
+  Email:     ${user.email}
+  Updated:   ${groupedTasks.touched.length} tasks.
+  Others:    ${groupedTasks.touchedByOthers.length} tasks.
+  Untouched: ${groupedTasks.untouched.length} tasks.
+  `)
+
+  if (groupedTasks.touched.length) {
+    groupedTasks.touched.sort((a, b) => a.count < b.count ? 1 : -1)
+    console.log('Top Tasks:')
+    groupedTasks.touched.forEach(x => (
+      console.log(`[${x.count}] ${x.task.title}`)
+    ))
+  }
+  console.log(`\n`)
+
+  if (groupedTasks.touchedByOthers.length) {
+    console.log('Responses:')
+    groupedTasks.touchedByOthers.forEach(x => {
+      console.log(x.task.title)
+      Object.keys(x.userAudits).forEach(userId => {
+        const email = userMap[userId].email
+        const events = Object.keys(x.userAudits[userId]).join(', ')
+        console.log(`  ${email} [ ${events} ]`)
+      })
+      console.log(`\n`)
+    })
+  }
 }
 
 function * getAuditsMetadata (db, { auditsFile }) {
@@ -113,19 +176,22 @@ function * getAuditsMetadata (db, { auditsFile }) {
   .toArray()
   console.log(`Found ${users.length} users.`)
 
+  const auditedTasksMap = getAuditedTasksMap(audits)
+  const userMap = users.reduce((acc, x) => {
+    acc[x._id.toString()] = x
+    return acc
+  }, { })
+
   // For each user, fetch owned resources and determine stuff that
   // requires the user’s attention (i.e. that they follow up).
   let max = 10
   for (const user of users) {
+    const userId = user._id.toString()
     const tasks = yield getRecentNonCompletedTasksForUser(db, user)
-    const auditedTasks = getAuditedTasksMap(user._id.toString(), audits)
-    const groupedTasks = groupTasksByTouchedAndUntouched(tasks, auditedTasks)
+    const userTasks = getAuditedTasksMapForUser(userId, audits)
+    const groupedTasks = groupTasksByTouchedAndUntouched(userId, tasks, userTasks, auditedTasksMap)
 
-    console.log(
-    `Found ${Object.keys(groupedTasks.touched).length} / ` +
-    `${Object.keys(groupedTasks.untouched).length} touched tasks ` +
-    `for user ${user.email}.`
-    )
+    printTaskReport(user, groupedTasks, userMap)
 
     if (!--max) {
       break
