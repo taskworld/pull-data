@@ -23,7 +23,13 @@ console.log(`
   Report Email Recipients: ${REPORT_RECIPIENTS}
 `)
 
-setTimeout(run, RUN_INTERVAL_MS / 2)
+if (args[1] === 'send') {
+  // Force sending the log file.
+  sendReportAndTruncate(REPORT_FILENAME, REPORT_RECIPIENTS)
+} else {
+  // Run Monami.
+  setTimeout(run, RUN_INTERVAL_MS / 2)
+}
 
 const reportFields = [
   'ts',
@@ -84,9 +90,14 @@ function run () {
     }
   })
   .then(() => {
-    // Truncate the reports file and send a report if we’ve been running for a while.
+    // Truncate the log file and send it as a report
+    // if we’ve been running for a while.
+    // Do it only once it’s large enough.
     if (runStats.runs % 20 === 0) {
-      return sendReportAndTruncate(REPORT_FILENAME, REPORT_RECIPIENTS)
+      const stat = Fs.statSync(REPORT_FILENAME)
+      if (stat.size > REPORT_SIZE_THRESHOLD) {
+        return sendReportAndTruncate(REPORT_FILENAME, REPORT_RECIPIENTS)
+      }
     }
   })
   .catch(reason => console.error('Error:', reason))
@@ -103,27 +114,22 @@ function run () {
 }
 
 function sendReportAndTruncate (report, recips) {
-  return P.try(() => {
-    const stat = Fs.statSync(report)
-    if (stat.size > REPORT_SIZE_THRESHOLD) {
-      Sendgrid.sendEmail({
-        from: 'reports@taskworld.com',
-        to: recips[0], // FIXME: Yep.
-        subject: 'Test Report.',
-        body: 'FYI. Here’s the report.',
-        files: [
-          { path: report, mime: 'text/plain' }
-        ]
-      })
-      // Truncate if the send went well.
-      .then(response => {
-        if (response.statusCode === 202) {
-          console.log('Truncating report file:', report)
-          Fs.truncateSync(report)
-        } else {
-          console.log('Sendgrid gave unexpected response:', response)
-        }
-      })
+  return Sendgrid.sendEmail({
+    from: 'reports@taskworld.com',
+    to: recips[0], // FIXME: Yep.
+    subject: 'Test Report.',
+    body: 'FYI. Here’s the report.',
+    files: [
+      { path: report, mime: 'text/plain' }
+    ]
+  })
+  // Truncate if the send went well.
+  .then(response => {
+    if (response.statusCode === 202) {
+      console.log('Truncating report file:', report)
+      Fs.truncateSync(report)
+    } else {
+      console.log('Sendgrid gave unexpected response:', response)
     }
   })
 }
