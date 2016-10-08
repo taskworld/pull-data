@@ -24,6 +24,7 @@
     "moment": "^2.14.1",
     "mongodb": "^2.2.9",
     "paypal-rest-sdk": "^1.6.9",
+    "sendgrid": "^4.5.0",
     "tcomb": "^3.2.13"
   },
   "devDependencies": {

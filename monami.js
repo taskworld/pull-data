@@ -5,13 +5,23 @@ const Fs = require('fs')
 const Path = require('path')
 const Exec = require('child_process').exec
 const Moment = require('moment')
+const Sendgrid = require('./lib/sendgrid')
 
 const args = process.argv.slice(2)
 const RUN_INTERVAL_MS = 5000
 const CPU_PERCENTAGE_THRESHOLD = 25
 const MEMORY_PERCENTAGE_THRESHOLD = 10
 const REPORT_FILENAME = args[0] || '/tmp/performance-log.txt'
-console.log('Monami logging to:', REPORT_FILENAME)
+
+// Send a gzipped report when the log has grown passed 1 MB.
+const REPORT_SIZE_THRESHOLD = 1024 * 1024
+const REPORT_RECIPIENTS = ['anri@taskworld.com']
+
+console.log(`
+  Monami.
+  Logging To File:         ${REPORT_FILENAME}
+  Report Email Recipients: ${REPORT_RECIPIENTS}
+`)
 
 setTimeout(run, RUN_INTERVAL_MS / 2)
 
@@ -73,6 +83,13 @@ function run () {
       })
     }
   })
+  .then(() => {
+    // Truncate the reports file and send a report if we’ve been running for a while.
+    if (runStats.runs % 20 === 0) {
+      return sendReportAndTruncate(REPORT_FILENAME, REPORT_RECIPIENTS)
+    }
+  })
+  .catch(reason => console.error('Error:', reason))
   .finally(() => {
     // console.log('It’s a Done Deal.')
     runStats.totalTime += timer()
@@ -82,6 +99,32 @@ function run () {
     }
     runStats.runs++
     setTimeout(run, RUN_INTERVAL_MS)
+  })
+}
+
+function sendReportAndTruncate (report, recips) {
+  return P.try(() => {
+    const stat = Fs.statSync(report)
+    if (stat.size > REPORT_SIZE_THRESHOLD) {
+      Sendgrid.sendEmail({
+        from: 'reports@taskworld.com',
+        to: recips[0], // FIXME: Yep.
+        subject: 'Test Report.',
+        body: 'FYI. Here’s the report.',
+        files: [
+          { path: report, mime: 'text/plain' }
+        ]
+      })
+      // Truncate if the send went well.
+      .then(response => {
+        if (response.statusCode === 202) {
+          console.log('Truncating report file:', report)
+          Fs.truncateSync(report)
+        } else {
+          console.log('Sendgrid gave unexpected response:', response)
+        }
+      })
+    }
   })
 }
 
