@@ -32,6 +32,11 @@ function run () {
       return postProcessAuditsData(AUDITS_EXPORT_FILE)
     }
 
+    if (args.story) {
+      Assert(args.workspace, 'Missing argument --workspace')
+      return getWorkspaceStory(args.workspace)
+    }
+
     printUsage()
   })
   .catch(Assert.AssertionError, reason => {
@@ -50,6 +55,119 @@ function printUsage () {
 
     --process   Post-process exported audits data.
   `)
+}
+
+function getWorkspaceStory (workspaceName) {
+  console.log(`
+  Creating workspace story:
+  Workspace Name: ${workspaceName}
+  `)
+
+  return Mongo
+  .query(getWorkspaceData, { workspaceName })
+}
+
+function * getWorkspaceData (db, { workspaceName }) {
+  const spaces = yield db.collection('workspaces').find({
+    display_name: new RegExp(workspaceName, 'i')
+  })
+  .limit(10)
+  .project({ name: 1, display_name: 1, owner_id: 1, membership_id: 1 })
+  .toArray()
+
+  // const startDate = Moment().startOf('year')
+  // const fromAuditId = yield * findStartAuditIdByStartDate(db, { startDate })
+
+  const spacesMap = listToMap(spaces)
+  console.log('Found workspaces:', spaces.map(x => x.display_name))
+
+  for (const space of spaces) {
+    const spaceId = space._id.toString()
+    const onboardingProjectsMap = yield getOnboardingProjectsForSpace(db, spaceId)
+    const stats = yield getUpdatedResourcesForSpace(db, spaceId)
+
+    console.log('Workspace:', space.display_name)
+    console.log('Task stats:', stats.map(x => [x._id, x.count]))
+
+    const taskMap = stats.reduce((acc, x) => {
+      x.taskIds.forEach(y => acc[y] = 1)
+      return acc
+    }, { })
+
+    if (Object.keys(taskMap).length) {
+      let tasks = yield getTasksForSpace(db, Object.keys(taskMap), spaceId)
+
+      // Clean out tasks that are part of onboarding projects.
+      tasks.reduce((acc, x) => {
+        if (!onboardingProjectsMap[x.project_id]) {
+          taskMap[x._id.toString()] = x
+        }
+      })
+      console.log('Tasks:')
+      Object.keys(taskMap).forEach(x => {
+        const task = taskMap[x]
+        if (task !== 1) {
+          console.log('  -  ', task.title, Moment(task.created).format('YYYY-MM-DD'))
+        }
+      })
+    }
+  }
+}
+
+/*
+Aggregation query;
+
+db.audits.aggregate([
+  {
+    $match: {
+      event: { $in: ['task:create', 'task:update:completed'] },
+      _id: { $gt: ObjectId('57e8b96139792a2c09033848') }
+    }
+  },
+  {
+      $project: {
+        date: { $dateToString: { format: '%Y-%m-%d', date: '$created' } },
+        event: 1
+      }
+  },
+  { $group: { _id: { $concat: ['$date', '/', '$event'] }, count: { $sum: 1 } } },
+  { $sort: { _id: -1 } }
+])
+*/
+
+function getUpdatedResourcesForSpace (db, spaceId, fromAuditId) {
+  const $match = {
+    // _id: { $gte: fromAuditId },
+    space_id: spaceId,
+    event: { $in: ['task:create', 'task:update:completed'] }
+  }
+  const $project = {
+    date: { $dateToString: { format: '%Y-%m-%d', date: '$created' } },
+    event: 1,
+    taskId: '$r1'
+  }
+  const $group = {
+    _id: { $concat: ['$date', '/', '$event'] },
+    count: { $sum: 1 },
+    taskIds: { $addToSet: '$taskId' }
+  }
+  const $sort = { '_id': -1 }
+
+  return db.collection('audits')
+  .aggregate([
+    { $match },
+    { $project },
+    { $group },
+    { $sort }
+  ])
+  .toArray()
+}
+
+function listToMap (list, id = '_id') {
+  return list.reduce((acc, x) => {
+    acc[x[id].toString()] = x
+    return acc
+  }, { })
 }
 
 function postProcessAuditsData (auditsFile) {
@@ -78,6 +196,39 @@ function getRecentNonCompletedTasksForUser (db, user) {
   .project({ title: 1, created: 1, updated: 1 })
   .sort({ _id: -1 })
   .toArray()
+}
+
+function getTasksForSpace (db, taskIds, spaceId) {
+  const where = {
+    _id: { $in: taskIds.map(Mongo.getObjectId) },
+    space_id: spaceId
+  }
+
+  console.log(`Fetching tasks ..`)
+  return db.collection('tasks')
+  .find(where)
+  .project({
+    title: 1,
+    created: 1,
+    updated: 1,
+    owner_id: 1,
+    project_id: 1
+  })
+  .sort({ _id: -1 })
+  .toArray()
+}
+
+function getOnboardingProjectsForSpace (db, spaceId) {
+  const where = {
+    space_id: spaceId,
+    is_onboarding: true
+  }
+
+  return db.collection('projects')
+  .find(where)
+  .project({ _id: 1 })
+  .toArray()
+  .then(result => listToMap(result))
 }
 
 function getAuditedTasksMapForUser (userId, audits) {
@@ -218,7 +369,7 @@ function * findStartAuditIdByStartDate (db, opts) {
     const where = { }
     if (lastId) where._id = { $lt: lastId }
     const [doc] = yield db.collection('audits')
-    .find(where).sort({ _id: -1 }).limit(1).skip(50000).toArray()
+    .find(where).sort({ _id: -1 }).limit(1).skip(250000).toArray()
     lastId = doc._id
 
     const created = Moment(doc.created)
