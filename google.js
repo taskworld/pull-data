@@ -184,9 +184,16 @@ function parseOpts (opts) {
 
   if (filter) {
     const filterParts = filter.split(',')
+    let operator = filterParts[1]
+    let not = false
+    if (operator.includes('NOT/')) {
+      not = true
+      operator = operator.replace('NOT/', '')
+    }
     params.filters = [{
       name: filterParts[0],
-      operator: filterParts[1],
+      not,
+      operator,
       expression: filterParts.slice(2)
     }]
   }
@@ -234,7 +241,7 @@ function queryGenerator (params) {
 function createFilterClause (opts) {
   return {
     dimensionName: opts.name,
-    not: false,
+    not: !!opts.not,
     operator: opts.operator.toUpperCase(),
     expressions: Array.isArray(opts.expression) ? opts.expression : [opts.expression],
     caseSensitive: true
