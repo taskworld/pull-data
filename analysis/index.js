@@ -32,7 +32,8 @@ function run () {
 
     if (args.story) {
       Assert(args.workspace, 'Missing argument --workspace')
-      return getWorkspaceStory(args.workspace)
+      Assert(args.email, 'Missing argument --email')
+      return getWorkspaceStory(args)
     }
 
     printUsage()
@@ -49,23 +50,22 @@ function printUsage () {
   console.log(`
   Usage: node export-tw-data.js
     --export        Export audits data from Taskworld.
-      --from        From date, e.g. 2016-07-01
+      --from        From date, e.g. 2016-07-01.
 
     --process       Post-process exported audits data.
 
-    --story         Create a workspace story (Gantt).
+    --story         Create a user story for a workspace.
       --workspace   Workspace name (pattern).
+      --user        Email of user.
   `)
 }
 
-function getWorkspaceStory (workspaceName) {
+function getWorkspaceStory (opts) {
   console.log(`
-  Creating workspace story:
-  Workspace Name: ${workspaceName}
+  Creating user story.
   `)
-
   return Mongo
-  .query(L.getWorkspaceData, { workspaceName })
+  .query(L.getWorkspaceData, opts)
 }
 
 function postProcessAuditsData (auditsFile) {

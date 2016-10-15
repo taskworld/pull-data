@@ -12,69 +12,106 @@ function assertFileExists (file) {
   Assert.doesNotThrow(() => Fs.accessSync(file), `Missing required file ${file}`)
 }
 
-function * getWorkspaceData (db, { workspaceName }) {
+function * getWorkspaceData (db, { workspace, email }) {
   const spaces = yield db.collection('workspaces').find({
-    display_name: new RegExp(workspaceName, 'i')
+    display_name: new RegExp(workspace, 'i')
   })
   .limit(10)
   .project({ name: 1, display_name: 1, owner_id: 1, membership_id: 1 })
   .toArray()
+  if (!spaces.length) {
+    return console.log('Could not find any matching workspaces for pattern:', workspace)
+  }
+  const space = spaces[0]
+  const spaceId = space._id.toString()
+  console.log('Found matching workspaces:', spaces.map(x => x.display_name))
+  console.log(`Selected workspace: ${space.name} (${space.display_name})`)
 
-  // const startDate = Moment().startOf('year')
-  // const fromAuditId = yield * findStartAuditIdByStartDate(db, { startDate })
+  const [user] = yield db.collection('users').find({ email })
+  .limit(1)
+  .project({ email: 1 })
+  .toArray()
+  if (!user) {
+    return console.log('Could not find a user with email:', email)
+  }
+  console.log('Found user:', user.email)
+  const userId = user._id.toString()
 
-  const spacesMap = listToMap(spaces)
-  console.log('Found workspaces:', spaces.map(x => x.display_name))
+  const actions = yield getUserActionsForSpace(db, {
+    userId,
+    spaceId,
+    fromDate: Moment('2016-09-01').startOf('month').toDate(),
+    toDate: Moment('2016-10-01').endOf('month').toDate(),
+    weekly: true
+  })
+  // console.log('Actions:')
+  actions.map(x => console.log(`${x._id} (${x.count})`))
 
-  for (const space of spaces) {
-    const spaceId = space._id.toString()
-    const onboardingProjectsMap = yield getOnboardingProjectsForSpace(db, spaceId)
-    const stats = yield getUpdatedResourcesForSpace(db, spaceId)
-
-    console.log('Workspace:', space.display_name)
-    console.log('Task stats:', stats.map(x => [x._id, x.count]))
-
-    const taskMap = stats.reduce((acc, x) => {
-      x.taskIds.forEach(y => acc[y] = 1)
+  const actionsPerDate = actions.reduce((acc, x) => {
+    if (!x._id) {
       return acc
-    }, { })
-
-    if (Object.keys(taskMap).length) {
-      let tasks = yield getTasksForSpace(db, Object.keys(taskMap), spaceId)
-
-      // Clean out tasks that are part of onboarding projects.
-      tasks.reduce((acc, x) => {
-        if (!onboardingProjectsMap[x.project_id]) {
-          taskMap[x._id.toString()] = x
-        }
-      })
-      console.log('Tasks:')
-      Object.keys(taskMap).forEach(x => {
-        const task = taskMap[x]
-        if (task !== 1) {
-          const created = Moment(task.created).format('YYYY-MM-DD')
-          console.log(`  -  [${created}] ${clean(task.title)}`)
-        }
-      })
     }
+    const [date, topic, id] = x._id.split('/')
+    if (!acc[date]) {
+      acc[date] = { read: { }, update: { } }
+      acc.order.push(date)
+    }
+    if (topic === 'task:get' || topic === 'task:get:comments') {
+      if (!acc[date].read[id]) acc[date].read[id] = 0
+      acc[date].read[id] += x.count
+    } else if (topic.includes('task:')) {
+      if (!acc[date].update[id]) acc[date].update[id] = 0
+      acc[date].update[id] += x.count
+    }
+    return acc
+  }, { order: [] })
+  // console.log('Actions:', actionsPerDate)
+
+  let tasksMap
+  for (const date of actionsPerDate.order) {
+    console.log('Date:', date)
+    const readTasksMap = actionsPerDate[date].read
+    const readTasks = Object.keys(readTasksMap).map(x => ({ id: x, count: readTasksMap[x] }))
+    readTasks.sort((a, b) => a.count > b.count ? -1 : 1)
+
+    tasksMap = listToMap(yield getTasksForSpace(db, {
+      taskIds: readTasks.map(x => x.id),
+      spaceId
+    }))
+    console.log('Top read Tasks:')
+    readTasks.map(x => {
+      const t = tasksMap[x.id]
+      t.status = t.status === 2 ? 'complete' : 'ongoing'
+      t.count = x.count
+      return t
+    })
+    .filter(t => t.status === 'ongoing' && t.is_deleted !== true)
+    .map(t => {
+      console.log(` - ${t.title} (${t.count} times)`)
+    })
   }
 }
 
-function getUpdatedResourcesForSpace (db, spaceId, fromAuditId) {
+function getUserActionsForSpace (db, opts) {
   const $match = {
-    // _id: { $gte: fromAuditId },
-    space_id: spaceId,
-    event: { $in: ['task:create', 'task:update:completed'] }
+    created: { $gte: opts.fromDate, $lt: opts.toDate },
+    owner_id: opts.userId,
+    space_id: opts.spaceId,
+    // Excludes !
+    $nor: [
+      { event: 'message:create', r3: 'channel' },
+      { event: 'task:get-accessible-tasks' }
+    ]
   }
+  const format = opts.weekly ? 'W%U' : '%Y-%m-%d'
   const $project = {
-    date: { $dateToString: { format: '%Y-%m-%d', date: '$created' } },
+    date: { $dateToString: { format, date: '$created' } },
     event: 1,
-    taskId: '$r1'
+    r1: 1
   }
   const $group = {
-    _id: { $concat: ['$date', '/', '$event'] },
-    count: { $sum: 1 },
-    taskIds: { $addToSet: '$taskId' }
+    _id: { $concat: ['$date', '/', '$event', '/', '$r1'] },
+    count: { $sum: 1 }
   }
   const $sort = { '_id': -1 }
 
@@ -83,7 +120,8 @@ function getUpdatedResourcesForSpace (db, spaceId, fromAuditId) {
     { $match },
     { $project },
     { $group },
-    { $sort }
+    { $sort },
+    { $limit: 1000 }
   ])
   .toArray()
 }
@@ -113,10 +151,13 @@ function getRecentNonCompletedTasksForUser (db, user) {
   .toArray()
 }
 
-function getTasksForSpace (db, taskIds, spaceId) {
+function getTasksForSpace (db, opts) {
   const where = {
-    _id: { $in: taskIds.map(Mongo.getObjectId) },
-    space_id: spaceId
+    _id: { $in: opts.taskIds.map(Mongo.getObjectId) },
+    space_id: opts.spaceId
+  }
+  if (opts.excludedProjectIds) {
+    where.project_id = { $nin: opts.excludedProjectIds }
   }
 
   console.log(`Fetching tasks ..`)
@@ -127,7 +168,12 @@ function getTasksForSpace (db, taskIds, spaceId) {
     created: 1,
     updated: 1,
     owner_id: 1,
-    project_id: 1
+    project_id: 1,
+    due_date: 1,
+    start_date: 1,
+    completed_date: 1,
+    status: 1,
+    is_deleted: 1
   })
   .sort({ _id: -1 })
   .toArray()
