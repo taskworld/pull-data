@@ -18,6 +18,7 @@ function query (func, args) {
 function connect (_url) {
   // mongodb://[username:password@]host1[:port1][/[database]
   const url = _url || process.env.PULLDATA_MONGO_DB_URL
+  console.log('Connecting to', url)
   return MongoClient.connect(url)
   .then(db => {
     _db = db
