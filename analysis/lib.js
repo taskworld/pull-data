@@ -12,6 +12,185 @@ function assertFileExists (file) {
   Assert.doesNotThrow(() => Fs.accessSync(file), `Missing required file ${file}`)
 }
 
+function * getTaskOverviewReport (db, { workspace }) {
+  // Get workspaces.
+  const spaces = yield db.collection('workspaces').find({
+    display_name: new RegExp(workspace, 'i')
+  })
+  .limit(3)
+  .toArray()
+  if (!spaces.length) {
+    return console.log('Could not find any matching workspaces for pattern:', workspace)
+  }
+  const space = spaces[0]
+  const spaceId = space._id.toString()
+  console.log('Found matching workspaces:', spaces.map(x => x.display_name))
+  console.log(`Selected workspace: ${space.name} (${space.display_name})`)
+
+  // Get users.
+  const removedMembers = space.member_profiles.reduce((acc, x) => {
+    if (x.is_removed) {
+      acc[x._id] = 1
+    }
+    return acc
+  }, { })
+
+  const uniqueMembers = [ ...new Set([].concat([space.owner_id], space.admins, space.members)) ]
+  console.log(`Found ${uniqueMembers.length} unique members.`)
+  const userIds = uniqueMembers.filter(x => !removedMembers[x])
+  console.log(`Found ${userIds.length} non-removed members.`)
+
+  const maxAge = Moment().subtract(3, 'months').toDate()
+
+  const users = yield db.collection('users').find({
+    _id: { $in: userIds.map(Mongo.getObjectId) },
+    last_login: { $gte: maxAge }
+  })
+  .limit(500)
+  .project({
+    email: 1,
+    first_name: 1,
+    last_name: 1,
+    phone: 1,
+    photo: 1,
+    job_title: 1,
+    department: 1,
+    language: 1,
+    time_zone: 1
+  })
+  .toArray()
+  console.log(`Found ${users.length} active users.`)
+
+  const userMap = listToMap(users)
+  const activeUserIds = Object.keys(userMap)
+
+  // Get tasks.
+  const tasks = yield db.collection('tasks').find({
+    status: { $ne: 2 },
+    is_deleted: false,
+    space_id: spaceId,
+    $or: [
+      { is_owner: { $in: activeUserIds } },
+      { 'members._id': { $in: activeUserIds }, 'members.is_assignee': true }
+    ],
+    updated: { $gte: maxAge }
+  })
+  .limit(1000)
+  .project({
+    title: 1,
+    members: 1,
+    owner_id: 1,
+    project_id: 1,
+    created: 1,
+    updated: 1,
+    due_date: 1,
+    start_date: 1
+  })
+  .sort({ _id: -1 })
+  .toArray()
+
+  console.log(`Found ${tasks.length} unfinished tasks.`)
+  const taskIds = tasks.map(x => x._id.toString())
+
+  // Get tasklists.
+  const tasklists = yield db.collection('tasklists').find({
+    space_id: spaceId,
+    // project_id: { $in: projectIds },
+    tasks: { $in: taskIds }
+  })
+  .limit(1000)
+  .project({ title: 1, tasks: 1, project_id: 1 })
+  .toArray()
+  console.log(`Found ${tasklists.length} related tasklists.`)
+
+  const taskToTasklistMap = tasklists.reduce((acc, tl) => {
+    tl.tasks.forEach(taskId => {
+      acc[taskId] = {
+        project_id: tl.project_id,
+        title: tl.title
+      }
+    })
+    return acc
+  }, { })
+
+  // Get projects for tasklists.
+  const projectIds = tasklists.map(x => x.project_id)
+  const projects = yield db.collection('projects').find({
+    _id: { $in: projectIds.map(Mongo.getObjectId) },
+    space_id: spaceId
+  })
+  .limit(200)
+  .project({ title: 1, members: 1 })
+  .toArray()
+  console.log(`Found ${projects.length} related projects.`)
+  const projectMap = listToMap(projects)
+
+  tasks.forEach(task => {
+    task.title = clean(task.title)
+    task.project = '[NO PROJECT]'
+    task.tasklist = '[NO LIST]'
+
+    const tasklist = taskToTasklistMap[task._id.toString()]
+    if (tasklist) {
+      task.tasklist = clean(tasklist.title)
+      const project = projectMap[tasklist.project_id]
+      if (project) {
+        task.project = clean(project.title)
+      }
+    }
+
+    // Add tasks to users.
+    if (userMap[task.owner_id]) {
+      if (!userMap[task.owner_id].owns) {
+        userMap[task.owner_id].owns = []
+      }
+      userMap[task.owner_id].owns.push(task)
+    }
+    task.members.forEach(x => {
+      if (userMap[x._id]) {
+        if (!userMap[x._id].assigned) {
+          userMap[x._id].assigned = []
+        }
+        userMap[x._id].assigned.push(task)
+      }
+    })
+  })
+
+  const getTaskData = (t) => {
+    const date = Moment(t.created).format('YYYY-MM-DD')
+    return {
+      date,
+      list: `${t.project} — ${t.tasklist}`,
+      title: t.title
+    }
+  }
+
+  const groupTasksByList = (map, tasks, tag) => {
+    if (tasks) {
+      tasks.forEach(t => {
+        const d = getTaskData(t)
+        if (tag) {
+          Object.assign(d, tag)
+        }
+        if (!map[d.list]) {
+          map[d.list] = []
+        }
+        map[d.list].push(d)
+      })
+    }
+  }
+
+  const report = Object.keys(userMap).reduce((acc, userId) => {
+    const u = userMap[userId]
+    acc[userId] = { }
+    groupTasksByList(acc[userId], u.owns, { owner: true })
+    groupTasksByList(acc[userId], u.assigned, { assignee: true })
+    return acc
+  }, { })
+
+  console.log('Report:', JSON.stringify(report, null, 2))
+}
+
 function * getWorkspaceData (db, { workspace, email }) {
   const spaces = yield db.collection('workspaces').find({
     display_name: new RegExp(workspace, 'i')
@@ -406,5 +585,6 @@ module.exports = {
   assertFileExists,
   getWorkspaceData,
   getAuditsMetadata,
-  exportRecentlyUpdated
+  exportRecentlyUpdated,
+  getTaskOverviewReport
 }

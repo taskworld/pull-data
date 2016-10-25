@@ -36,6 +36,11 @@ function run () {
       return getWorkspaceStory(args)
     }
 
+    if (args.overview) {
+      Assert(args.workspace, 'Missing argument --workspace')
+      return getTaskOverviewReport(args)
+    }
+
     printUsage()
   })
   .catch(Assert.AssertionError, reason => {
@@ -57,7 +62,18 @@ function printUsage () {
     --story         Create a user story for a workspace.
       --workspace   Workspace name (pattern).
       --user        Email of user.
+
+    --overview      Create task overview report for a workspace.
+      --workspace   Workspace name (pattern).
   `)
+}
+
+function getTaskOverviewReport (opts) {
+  console.log(`
+  Creating task overview report.
+  `)
+  return Mongo
+  .query(L.getTaskOverviewReport, opts)
 }
 
 function getWorkspaceStory (opts) {
