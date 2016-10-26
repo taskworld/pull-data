@@ -9,6 +9,8 @@ const Fs = require('fs')
 P.promisifyAll(Fs)
 
 const L = require('./lib')
+const { assertFileExists } = require('./util')
+const { getTaskOverviewReport } = require('./overview')
 
 const AUDITS_EXPORT_FILE = '/tmp/tw-audit-data.json'
 const MONGO_URL = 'mongodb://admin:open@localhost/taskworld_enterprise_us?authSource=admin'
@@ -26,7 +28,7 @@ function run () {
     }
 
     if (args.process) {
-      L.assertFileExists(AUDITS_EXPORT_FILE)
+      assertFileExists(AUDITS_EXPORT_FILE)
       return postProcessAuditsData(AUDITS_EXPORT_FILE)
     }
 
@@ -38,7 +40,7 @@ function run () {
 
     if (args.overview) {
       Assert(args.workspace, 'Missing argument --workspace')
-      return getTaskOverviewReport(args)
+      return createTaskOverviewReport(args)
     }
 
     printUsage()
@@ -68,12 +70,12 @@ function printUsage () {
   `)
 }
 
-function getTaskOverviewReport (opts) {
+function createTaskOverviewReport (opts) {
   console.log(`
   Creating task overview report.
   `)
   return Mongo
-  .query(L.getTaskOverviewReport, opts)
+  .query(getTaskOverviewReport, opts)
 }
 
 function getWorkspaceStory (opts) {
