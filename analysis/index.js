@@ -11,6 +11,7 @@ P.promisifyAll(Fs)
 const L = require('./lib')
 const { assertFileExists } = require('./util')
 const { getTaskOverviewReport } = require('./overview')
+const { getInactiveProjectsReport } = require('./projectCleaner')
 
 const AUDITS_EXPORT_FILE = '/tmp/tw-audit-data.json'
 const MONGO_URL = 'mongodb://admin:open@localhost/taskworld_enterprise_us?authSource=admin'
@@ -43,6 +44,11 @@ function run () {
       return createTaskOverviewReport(args)
     }
 
+    if (args['inactive-projects']) {
+      Assert(args.workspace, 'Missing argument --workspace')
+      return Mongo.query(getInactiveProjectsReport, args)
+    }
+
     printUsage()
   })
   .catch(Assert.AssertionError, reason => {
@@ -66,6 +72,10 @@ function printUsage () {
       --user        Email of user.
 
     --overview      Create task overview report for a workspace.
+      --workspace   Workspace name (pattern).
+      [--email]     Email address of user (optional).
+
+    --inactive-projects   Create a report of all inactive and potentially useless projects in a workspace.
       --workspace   Workspace name (pattern).
   `)
 }

@@ -38,10 +38,16 @@ function * getTaskOverviewReport (db, { workspace, email }) {
 
   const maxAge = Moment().subtract(3, 'months').toDate()
 
-  const users = yield db.collection('users').find({
+  const usersWhere = {
     _id: { $in: userIds.map(Mongo.getObjectId) },
     last_login: { $gte: maxAge }
-  })
+  }
+  if (email) {
+    usersWhere.email = email
+  }
+
+  const users = yield db.collection('users')
+  .find(usersWhere)
   .limit(500)
   .project({
     email: 1,
@@ -198,6 +204,88 @@ function * getTaskOverviewReport (db, { workspace, email }) {
       })
     })
   }
+  // ['project:get-complete']
+  let eventStats = yield getProjectStatsForSpace(db, spaceId)
+  eventStats = yield * cleanOutInactiveProjects(db, eventStats)
+  eventStats.forEach(x => {
+    console.log(x.event_count, x.project.title, Moment(x.last_event).format('YYYY-MM-DD'))
+  })
+}
+
+function * cleanOutInactiveProjects (db, eventStats, maxAgeDays = 60) {
+  const projectIds = eventStats.map(x => x._id.project_id)
+  const maxAge = Moment().subtract(maxAgeDays, 'days')
+
+  const projects = yield db.collection('projects')
+  .find({
+    _id: { $in: projectIds.map(Mongo.getObjectId) }
+    // $or: [
+    //   { is_deleted: true },
+    //   { is_archived: true },
+    //   { is_personal: true }
+    // ]
+  })
+  .limit(2000)
+  .project({
+    title: 1,
+    created: 1,
+    is_archived: 1,
+    is_deleted: 1,
+    is_personal: 1
+  })
+  .toArray()
+  const projectsMap = listToMap(projects)
+
+  console.log('event stats before filtering projects:', eventStats.length)
+
+  const inactiveProjects = eventStats
+  .filter(x => {
+    const p = projectsMap[x._id.project_id]
+    if (!p) {
+      console.log('BAD PROJECT!!!', x)
+      return false
+    }
+    // Remove deleted, archived or personal projects.
+    return !(p.is_deleted || p.is_archived || p.is_personal)
+  })
+  .filter(x => Moment(x.last_event).isBefore(maxAge))
+
+  // Add some metadata !
+  inactiveProjects.forEach(x => {
+    x.project = projectsMap[x._id.project_id]
+  })
+
+  console.log('event stats after filtering projects: ', inactiveProjects.length)
+  return inactiveProjects
+}
+
+function getProjectStatsForSpace (db, spaceId) {
+  const $match = {
+    space_id: spaceId,
+    event: 'project:get-complete'
+  }
+  const $project = { event: 1, space_id: 1, r1: 1, owner_id: 1, created: 1 }
+  const $group = {
+    _id: {
+      space_id: '$space_id',
+      event: '$event',
+      project_id: '$r1'
+    },
+    event_count: { $sum: 1 },
+    last_event: { $max: '$created' }
+  }
+  const $sort = {
+    event_count: -1
+  }
+
+  return db.collection('audits')
+  .aggregate([
+    { $match },
+    { $project },
+    { $group },
+    { $sort }
+  ])
+  .toArray()
 }
 
 module.exports = {
