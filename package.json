@@ -8,7 +8,7 @@
     "weekly-dev": "nodemon --ext html,js --watch reports reports/create-weekly-stats-report.js",
     "customers-dev": "nodemon --ext js,html --watch reports reports/create-customers-report.js",
     "marketing-dev": "nodemon --ext js,html --watch reports reports/create-marketing-performance-report.js",
-    "server-dev": "nodemon --ext js,html --watch reports reports/server.js"
+    "project-cleaner-dev": "nodemon --ext js,html --watch analysis analysis/createProjectCleanerReport.js"
   },
   "author": "",
   "license": "ISC",

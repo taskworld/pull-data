@@ -3,7 +3,7 @@
 const P = require('bluebird')
 const Moment = require('moment')
 const Mongo = require('../mongodb')
-const { clean, listToMap } = require('./util')
+const { listToMap } = require('./util')
 
 const Fs = require('fs')
 P.promisifyAll(Fs)
@@ -30,13 +30,9 @@ function * getInactiveProjectsReport (db, { workspace }) {
   const readStats = yield getProjectReadStatsForSpace(db, spaceId, projectIds, maxAge.toDate())
   const readStatsWithMetadata = yield * getProjectCleanupMetadataForStats(db, readStats)
 
-  console.log('Entries:', JSON.stringify(readStatsWithMetadata[0], null, 2))
-
-  // const eventStats = yield getProjectStatsForSpace(db, spaceId)
-  // const inactiveProjects = yield * cleanOutInactiveProjects(db, eventStats, maxAge)
-  // inactiveProjects.forEach(x => {
-  //   console.log(x.event_count, x.project.title, Moment(x.last_event).format('YYYY-MM-DD'))
-  // })
+  console.log(`Created ${readStatsWithMetadata.length} project stats entries.`)
+  console.log('First entry:', JSON.stringify(readStatsWithMetadata[0], null, 2))
+  Fs.writeFileSync('/tmp/project-clean-data.json', JSON.stringify(readStatsWithMetadata, null, 2))
 }
 
 function getActiveProjectsForSpace (db, spaceId, createdDate) {
@@ -58,23 +54,31 @@ function getUsers (db, userIds) {
   return db.collection('users')
   .find({ _id: { $in: userIds.map(Mongo.getObjectId) } })
   .limit(1000)
-  .project({ email: 1, first_name: 1, last_name: 1 })
+  .project({ email: 1, first_name: 1, last_name: 1, photo: 1 })
   .toArray()
 }
 
 function getTasklists (db, tasklistIds) {
   return db.collection('tasklists')
-  .find({ _id: { $in: tasklistIds.map(Mongo.getObjectId) } })
+  .find({
+    _id: { $in: tasklistIds.map(Mongo.getObjectId) },
+    is_deleted: false
+  })
   .limit(1000)
   .project({ title: 1, tasks: 1 })
+  .sort({ _id: -1 })
   .toArray()
 }
 
 function getTasks (db, taskIds) {
   return db.collection('tasks')
-  .find({ _id: { $in: taskIds.map(Mongo.getObjectId) } })
+  .find({
+    _id: { $in: taskIds.map(Mongo.getObjectId) },
+    is_deleted: false
+  })
   .limit(1000)
   .project({ title: 1 })
+  .sort({ _id: -1 })
   .toArray()
 }
 
@@ -95,6 +99,7 @@ function * getProjectCleanupMetadataForStats (db, projectStats) {
   })
   .toArray()
   const projectsMap = listToMap(projects)
+  console.log(`Found ${projects.length} projects.`)
 
   // Get user data
   const userIds = projects.reduce((acc, x) => (
@@ -109,14 +114,16 @@ function * getProjectCleanupMetadataForStats (db, projectStats) {
   // Get tasklist data
   const tasklistIds = projects.reduce((acc, x) => acc.concat(x.tasklists), [])
   const uniqueTasklistIds = [... new Set(tasklistIds)]
+  console.log(`Found ${uniqueTasklistIds.length} unique tasklists.`)
   const tasklists = yield getTasklists(db, uniqueTasklistIds)
   const tasklistMap = listToMap(tasklists)
 
   // Get task data
   const taskIds = tasklists.reduce((acc, x) => acc.concat(x.tasks), [])
   const uniqueTaskIds = [... new Set(taskIds)]
+  console.log(`Found ${uniqueTaskIds.length} unique tasks.`)
   const taskMap = listToMap(yield getTasks(db, uniqueTaskIds))
-  console.log(taskMap)
+  // console.log(taskMap)
 
   // Add metadata
   return projectStats.map(x => {
@@ -125,10 +132,7 @@ function * getProjectCleanupMetadataForStats (db, projectStats) {
     p.members = p.members.map(y => userMap[y._id])
     p.tasklists = p.tasklists.map(y => {
       const tl = tasklistMap[y]
-      const tasks = tl.tasks.map(z => {
-        console.log('Task:', taskMap[z].title)
-        return taskMap[z]
-      })
+      tl.tasks = tl.tasks.forEach(z => taskMap[z])
       return tl
     })
     x.project = p
