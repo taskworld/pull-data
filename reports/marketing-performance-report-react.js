@@ -23,12 +23,12 @@ class MonthlyReport extends React.Component {
     return (
       <div>
         <h1>{title}</h1>
-        <table className='table table-hover table-inverse tw-report-table'>
+        <table className='table table-hover table-inverse tw-report-table' style={{ whiteSpace: 'nowrap' }}>
           <thead>
             <tr>
               <th>Date</th>
               <th>
-                Marketing Cost
+                Marketing
                 <div className='details'>Paid Traffic</div>
               </th>
               <th>
@@ -57,24 +57,33 @@ class MonthlyReport extends React.Component {
               </th>
 
               <th>
-                Cost per License
+                Cost / License
                 <div className='details'>Total</div>
               </th>
               <th>
-                Cost per License
+                Cost / License
                 <div className='details'>Paid Traffic</div>
               </th>
               <th>
-                Cost per Signup
+                Cost / Signup
                 <div className='details'>Paid Traffic</div>
               </th>
 
               <th>
-                Conversion Rate
+                Churned
+                <div className='details'>Licenses</div>
+              </th>
+              <th>
+                MRR
+                <div className='details'>Estimate</div>
+              </th>
+
+              <th>
+                CR
                 <div className='details'>Signup to Paid</div>
               </th>
               <th>
-                Conversion Rate
+                CR
                 <div className='details'>Visit to Paid</div>
               </th>
             </tr>
@@ -143,6 +152,9 @@ const MonthlyReportRow = ({ row }) => {
       <td style={style}>$ {round(row.costPerLicensePaidMarketing, 2).toLocaleString()}</td>
       <td style={style}>$ {round(row.costPerSignupPaidMarketing, 2).toLocaleString()}</td>
 
+      <td style={style}>{row.totalLicensesChurned.toLocaleString()}</td>
+      <td style={style}>$ {round(row.averageLicenseCost * row.totalLicenses, 0).toLocaleString()}</td>
+
       <td style={style}>{row.conversionRateAllChannels} %</td>
       <td style={style}>{row.conversionRateUsers} %</td>
     </tr>
@@ -159,6 +171,7 @@ const MonthlyTotalRow = ({ report }) => {
       (report.filter(x => Number(x[field])).length || 1)
     )
   }
+  const getTotalMRR = () => report.reduce((acc, x) => acc + (x.averageLicenseCost * x.totalLicenses), 0)
 
   return (
     <tr style={{ backgroundColor: '#4cb992', color: 'white' }}>
@@ -174,6 +187,9 @@ const MonthlyTotalRow = ({ report }) => {
       <td style={style}>$ {round(getAverage('costPerLicenseAllChannels'), 2).toLocaleString()}</td>
       <td style={style}>$ {round(getAverage('costPerLicensePaidMarketing'), 2).toLocaleString()}</td>
       <td style={style}>$ {round(getAverage('costPerSignupPaidMarketing'), 2).toLocaleString()}</td>
+
+      <td style={style}>{getTotal('totalLicensesChurned').toLocaleString()}</td>
+      <td style={style}>$ {round(getTotalMRR(), 0).toLocaleString()}</td>
 
       <td style={style}>{round(getAverage('conversionRateAllChannels'), 2)} %</td>
       <td style={style}>{round(getAverage('conversionRateUsers'), 2)} %</td>
@@ -193,7 +209,7 @@ class AdGroupReport extends React.Component {
     return (
       <div>
         <h1>{title}</h1>
-        <table className='table table-hover table-inverse tw-report-table'>
+        <table className='table table-hover table-inverse tw-report-table' style={{ whiteSpace: 'nowrap' }}>
           <thead>
             <tr>
               <th>AdGroup</th>
@@ -213,17 +229,25 @@ class AdGroupReport extends React.Component {
                 Licenses
               </th>
               <th>
-                Cost per License
+                Cost / License
               </th>
               <th>
-                Cost per Signup
+                Cost / Signup
               </th>
               <th>
-                Conversion Rate
+                Churned
+                <div className='details'>Licenses</div>
+              </th>
+              <th>
+                MRR
+                <div className='details'>Estimate</div>
+              </th>
+              <th>
+                CR
                 <div className='details'>Signup to Paid</div>
               </th>
               <th>
-                Conversion Rate
+                CR
                 <div className='details'>Visit to Paid</div>
               </th>
             </tr>
@@ -288,13 +312,15 @@ const AdGroupReportRow = ({ row }) => {
   return (
     <tr className={cls}>
       <td>{row.adGroup}</td>
-      <td style={style}>$ {round(row.totalCostPaidMarketing, 2).toLocaleString()}</td>
+      <td style={style}>$ {round(row.totalCostPaidMarketing, 0).toLocaleString()}</td>
       <td style={style}>{row.totalUsers.toLocaleString()}</td>
       <td style={style}>{row.totalClicks.toLocaleString()}</td>
       <td style={style}>{row.totalSignups.toLocaleString()}</td>
       <td style={style}>{row.totalLicenses.toLocaleString()}</td>
       <td style={style}>$ {round(row.costPerLicenseAllChannels, 2).toLocaleString()}</td>
       <td style={style}>$ {round(row.costPerSignupPaidMarketing, 2).toLocaleString()}</td>
+      <td style={style}>{round(row.totalLicensesChurned, 2).toLocaleString()}</td>
+      <td style={style}>$ {round(row.averageLicenseCost * row.totalLicenses, 0).toLocaleString()}</td>
       <td style={style}>{row.conversionRateAllChannels} %</td>
       <td style={style}>{row.conversionRateUsers} %</td>
     </tr>
@@ -311,17 +337,23 @@ const AdGroupTotalRow = ({ report }) => {
       (report.filter(x => Number(x[field])).length || 1)
     )
   }
+  const getTotalMRR = () => report.reduce((acc, x) => acc + (x.averageLicenseCost * x.totalLicenses), 0)
 
   return (
     <tr style={{ backgroundColor: '#4cb992', color: 'white' }}>
       <td>Total</td>
-      <td style={style}>$ {round(getTotal('totalCostPaidMarketing'), 2).toLocaleString()}</td>
+      <td style={style}>$ {round(getTotal('totalCostPaidMarketing'), 0).toLocaleString()}</td>
       <td style={style}>{getTotal('totalUsers').toLocaleString()}</td>
       <td style={style}>{getTotal('totalClicks').toLocaleString()}</td>
       <td style={style}>{getTotal('totalSignups').toLocaleString()}</td>
       <td style={style}>{getTotal('totalLicenses').toLocaleString()}</td>
+
       <td style={style}>$ {round(getAverage('costPerLicenseAllChannels'), 2).toLocaleString()}</td>
       <td style={style}>$ {round(getAverage('costPerSignupPaidMarketing'), 2).toLocaleString()}</td>
+
+      <td style={style}>{round(getAverage('totalLicensesChurned'), 2).toLocaleString()}</td>
+      <td style={style}>$ {round(getTotalMRR(), 0).toLocaleString()}</td>
+
       <td style={style}>{round(getAverage('conversionRateAllChannels'), 2)} %</td>
       <td style={style}>{round(getAverage('conversionRateUsers'), 2)} %</td>
     </tr>

@@ -119,53 +119,76 @@ function calculateCustomerStats (statsReport) {
     adGroupRef.customers.forEach(customer => {
       let m
       const licenses = parseInt(customer.licenses, 10)
-      switch (customer.subscription) {
+      const isActive = isActiveCustomer(customer)
 
-        case 'premium':
-          const workspaceDate = Moment(customer.workspaceCreatedDate)
-          const workspaceMonth = workspaceDate.format('YYYYMM')
-          m = statsReport.month[workspaceMonth]
-          if (!m) {
-            m = statsReport.month[workspaceMonth] = createStatsEntry()
-          }
-          m.totalCustomers++
+      if (isActive) {
+        // Is active.
+        const workspaceDate = Moment(customer.workspaceCreatedDate)
+        const workspaceMonth = workspaceDate.format('YYYYMM')
+        m = statsReport.month[workspaceMonth]
+        if (!m) {
+          m = statsReport.month[workspaceMonth] = createStatsEntry()
+        }
+        m.totalCustomers++
+        m.totalLicenses += licenses
+        adGroupRef.totalLicenses += licenses
 
-          m.totalLicenses += licenses
-          adGroupRef.totalLicenses += licenses
-          addWeekStat(statsReport, workspaceDate, 'totalLicenses', licenses)
-          addWeekStat(adGroupRef, workspaceDate, 'totalLicenses', licenses)
+        // Add average license cost.
+        if (customer.amount && licenses) {
+          const subscriptionCost = customer.amount / (customer.billingCycle === 'annually' ? 12 : 1)
+          const costPerLicense = subscriptionCost / (licenses || 1)
+          m.averageLicenseCost += costPerLicense
+          m.licensesWithAmounts++
+          adGroupRef.averageLicenseCost += costPerLicense
+          adGroupRef.licensesWithAmounts++
+        }
 
-          if (adGroup !== '(not set)') {
-            m.licensesPaidMarketing += licenses
-            adGroupRef.licensesPaidMarketing += licenses
-            addWeekStat(statsReport, workspaceDate, 'licensesPaidMarketing', licenses)
-            addWeekStat(adGroupRef, workspaceDate, 'licensesPaidMarketing', licenses)
-          }
-          break
+        addWeekStat(statsReport, workspaceDate, 'totalLicenses', licenses)
+        addWeekStat(adGroupRef, workspaceDate, 'totalLicenses', licenses)
 
-        case 'canceled':
-          const endDate = Moment(customer.subscriptionEndDate)
-          const endMonth = endDate.format('YYYYMM')
-          m = statsReport.month[endMonth]
-          if (!m) {
-            m = statsReport.month[endMonth] = createStatsEntry()
-          }
+        if (adGroup !== '(not set)') {
+          m.licensesPaidMarketing += licenses
+          adGroupRef.licensesPaidMarketing += licenses
+          addWeekStat(statsReport, workspaceDate, 'licensesPaidMarketing', licenses)
+          addWeekStat(adGroupRef, workspaceDate, 'licensesPaidMarketing', licenses)
+        }
+      } else {
+        // Is churned.
+        const endDate = Moment(customer.subscriptionEndDate)
+        const endMonth = endDate.format('YYYYMM')
+        m = statsReport.month[endMonth]
+        if (!m) {
+          m = statsReport.month[endMonth] = createStatsEntry()
+        }
 
-          m.totalLicensesChurned += licenses
-          adGroupRef.totalLicensesChurned += licenses
-          addWeekStat(statsReport, endDate, 'totalLicensesChurned', licenses)
-          addWeekStat(adGroupRef, endDate, 'totalLicensesChurned', licenses)
+        m.totalLicensesChurned += licenses
+        adGroupRef.totalLicensesChurned += licenses
+        addWeekStat(statsReport, endDate, 'totalLicensesChurned', licenses)
+        addWeekStat(adGroupRef, endDate, 'totalLicensesChurned', licenses)
 
-          if (adGroup !== '(not set)') {
-            m.licensesPaidMarketingChurned += licenses
-            adGroupRef.licensesPaidMarketingChurned += licenses
-            addWeekStat(statsReport, endDate, 'licensesPaidMarketingChurned', licenses)
-            addWeekStat(adGroupRef, endDate, 'licensesPaidMarketingChurned', licenses)
-          }
-          break
+        if (adGroup !== '(not set)') {
+          m.licensesPaidMarketingChurned += licenses
+          adGroupRef.licensesPaidMarketingChurned += licenses
+          addWeekStat(statsReport, endDate, 'licensesPaidMarketingChurned', licenses)
+          addWeekStat(adGroupRef, endDate, 'licensesPaidMarketingChurned', licenses)
+        }
       }
     })
   })
+}
+
+function isChurnedCustomer (x) {
+  return _isActive(x).isBefore(Moment())
+}
+
+function isActiveCustomer (x) {
+  return _isActive(x).isAfter(Moment())
+}
+
+function _isActive (x) {
+  return x.billingCycle === 'monthly'
+  ? Moment(x.subscriptionEndDate).add(1, 'month').add(10, 'days')
+  : Moment(x.subscriptionEndDate).add(10, 'days')
 }
 
 function calcStats (e) {
@@ -175,6 +198,7 @@ function calcStats (e) {
   e.conversionRateAllChannels = getNumber(e.totalLicenses / e.totalSignups * 100).toFixed(2)
   e.conversionRatePaidMarketing = getNumber(e.licensesPaidMarketing / e.signupsPaidMarketing * 100).toFixed(2)
   e.conversionRateUsers = getNumber(e.totalLicenses / e.totalUsers * 100).toFixed(2)
+  e.averageLicenseCost = getNumber(e.averageLicenseCost / e.licensesWithAmounts)
 }
 
 function calculateAcquisitionCosts (statsReport) {
@@ -218,7 +242,9 @@ function createStatsEntry () {
     totalUsers: 0,
     signupsPaidMarketing: 0,
     licensesPaidMarketing: 0,
-    licensesPaidMarketingChurned: 0
+    licensesPaidMarketingChurned: 0,
+    averageLicenseCost: 0,
+    licensesWithAmounts: 0
   }
 }
 
