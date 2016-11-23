@@ -55,11 +55,12 @@ function renderTaskworldReport (twCsvFile, adwordsCsvFile) {
         licensesThisWeek: getLicensesAfter(Moment().startOf('isoWeek'), twRows),
         licensesThisMonth: getLicensesAfter(Moment().startOf('month'), twRows),
         licensesTotal: getTotalLicenses(twRows),
-        averagePurchaseTimeDays: getAveragePurchaseTimeDays(twRows).toFixed(2)
+        averagePurchaseTimeDays: getAveragePurchaseTimeDays(twRows).toFixed(2),
+        averageLicenseCost: getAverageLicenseCost(twRows)
       },
       rows: twRows
     }
-    // Add average churn rates.
+    // Add average churn rates
     getAverageChurnRates(report)
 
     console.log(JSON.stringify(report.report, null, 2))
@@ -80,21 +81,42 @@ function renderTaskworldReport (twCsvFile, adwordsCsvFile) {
   })
 }
 
+function getAverageLicenseCost (twRows) {
+  const s = twRows.reduce((acc, x) => {
+    if (x.amount && x.licenses) {
+      const amount = parseFloat(x.amount)
+      const licenses = parseInt(x.licenses, 10)
+      const subscriptionCost = amount / (x.billingCycle === 'annually' ? 12 : 1)
+      acc.averageLicenseCost += (subscriptionCost / (licenses || 1))
+      acc.licensesWithAmounts++
+    }
+    return acc
+  }, {
+    averageLicenseCost: 0,
+    licensesWithAmounts: 0
+  })
+  return s.averageLicenseCost / (s.licensesWithAmounts || 1)
+}
+
 function getAverageChurnRates (report) {
   const s = report.report.monthly.reduce((acc, x) => {
-    acc.churnRateMonthlyAverage += parseFloat(x.churnRate)
-    acc.churnRateOptimisticMonthlyAverage += parseFloat(x.churnRateOptimistic)
-    if (acc.churnRate) {
+    acc.churnRateMonthlyAverage += x.churnRate
+    acc.churnRateOptimisticMonthlyAverage += x.churnRateOptimistic
+    if (x.churnRate) {
       acc.churnRateMonths++
+    }
+    if (x.churnRateOptimistic) {
+      acc.churnRateOptimisticMonths++
     }
     return acc
   }, Object.assign(report.report, {
     churnRateMonthlyAverage: 0,
     churnRateOptimisticMonthlyAverage: 0,
-    churnRateMonths: 0
+    churnRateMonths: 0,
+    churnRateOptimisticMonths: 0
   }))
   s.churnRateMonthlyAverage /= (s.churnRateMonths || 1)
-  s.churnRateOptimisticMonthlyAverage /= (s.churnRateMonths || 1)
+  s.churnRateOptimisticMonthlyAverage /= (s.churnRateOptimisticMonths || 1)
 }
 
 function getTotalLicenses (twRows) {
@@ -157,8 +179,8 @@ function getStatsForPeriod (startDate, endDate, twRows) {
   .filter(isRealCustomer)
   .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
 
-  const churnRate = churnedLicensesInPeriod ? (churnedLicensesInPeriod / licensesBeforePeriod * 100).toFixed(2) : 0
-  const churnRateOptimistic = churnedLicensesFromRealCustomersInPeriod ? (churnedLicensesFromRealCustomersInPeriod / licensesFromRealCustomersBeforePeriod * 100).toFixed(2) : 0
+  const churnRate = licensesBeforePeriod ? (churnedLicensesInPeriod / licensesBeforePeriod) : 0
+  const churnRateOptimistic = licensesFromRealCustomersBeforePeriod ? (churnedLicensesFromRealCustomersInPeriod / licensesFromRealCustomersBeforePeriod) : 0
 
   console.log(`
   Churn rate in period ${startDate.format('YYYY-MM-DD')} - ${endDate.format('YYYY-MM-DD')}:

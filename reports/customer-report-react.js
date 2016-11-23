@@ -45,16 +45,22 @@ class App extends React.Component {
 
   renderOverallStats (report) {
     return (
-      <div style={{ width: 350 }}>
+      <div style={{ width: 800 }}>
         <table className='table table-hover table-bordered'>
           <tbody>
             <tr>
               <td>Licenses this Week:</td>
               <td className='percentage'>{report.licensesThisWeek}</td>
+              <td>Average Cost per License:</td>
+              <td className='percentage'>$ {report.averageLicenseCost.toFixed(2)}</td>
             </tr>
             <tr>
               <td>Licenses in {moment().format('MMM YYYY')}:</td>
               <td className='percentage'>{report.licensesThisMonth}</td>
+              <td>Potential Lifetime Value per License:</td>
+              <td className='percentage'>
+                $ {(report.averageLicenseCost / report.churnRateMonthlyAverage).toFixed(2)}
+              </td>
             </tr>
             <tr>
               <td>Total Active Licenses:</td>
@@ -66,7 +72,10 @@ class App extends React.Component {
             </tr>
             <tr>
               <td>Average Monthly License Churn Rate:</td>
-              <td className='percentage'>{report.churnRateOptimisticMonthlyAverage.toFixed(2)} %</td>
+              <td className='percentage'>
+                {(report.churnRateMonthlyAverage * 100).toFixed(2)}% &nbsp;/&nbsp;
+                {(report.churnRateOptimisticMonthlyAverage * 100).toFixed(2)}%
+              </td>
             </tr>
           </tbody>
         </table>
@@ -89,7 +98,7 @@ class App extends React.Component {
               <td>Churn Rate:</td>
               {report.monthly.map((x, i) => (
                 <td className='percentage'>
-                  {x.churnRate}%
+                  {(x.churnRate * 100).toFixed(2)}%
                 </td>
               ))}
             </tr>
@@ -110,7 +119,7 @@ class App extends React.Component {
               </td>
               {report.monthly.map((x, i) => (
                 <td className='percentage'>
-                  {x.churnRateOptimistic}%
+                  {(x.churnRateOptimistic * 100).toFixed(2)}%
                 </td>
               ))}
             </tr>
