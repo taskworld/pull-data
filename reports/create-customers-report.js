@@ -40,6 +40,7 @@ function renderTaskworldReport (twCsvFile, adwordsCsvFile) {
         Moment(x.subscriptionEndDate).diff(Moment(x.subscriptionStartDate), 'days'),
         Moment().diff(Moment(x.subscriptionStartDate), 'days')
       )
+      x.isActive = isActiveCustomer(x)
     })
 
     let html = Fs.readFileSync(Path.join(__dirname, 'layout.html'), 'utf8')
@@ -58,6 +59,9 @@ function renderTaskworldReport (twCsvFile, adwordsCsvFile) {
       },
       rows: twRows
     }
+    // Add average churn rates.
+    getAverageChurnRates(report)
+
     console.log(JSON.stringify(report.report, null, 2))
 
     html = html
@@ -76,16 +80,33 @@ function renderTaskworldReport (twCsvFile, adwordsCsvFile) {
   })
 }
 
+function getAverageChurnRates (report) {
+  const s = report.report.monthly.reduce((acc, x) => {
+    acc.churnRateMonthlyAverage += parseFloat(x.churnRate)
+    acc.churnRateOptimisticMonthlyAverage += parseFloat(x.churnRateOptimistic)
+    if (acc.churnRate) {
+      acc.churnRateMonths++
+    }
+    return acc
+  }, Object.assign(report.report, {
+    churnRateMonthlyAverage: 0,
+    churnRateOptimisticMonthlyAverage: 0,
+    churnRateMonths: 0
+  }))
+  s.churnRateMonthlyAverage /= (s.churnRateMonths || 1)
+  s.churnRateOptimisticMonthlyAverage /= (s.churnRateMonths || 1)
+}
+
 function getTotalLicenses (twRows) {
   return twRows
-  .filter((x) => x.subscription === 'premium')
+  .filter(isActiveCustomer)
   .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
 }
 
 function getMonthlyStatsSince (startMonth, numMonths, twRows) {
   console.log('Starting from month:', startMonth.format())
   const monthlyStats = []
-  for (let i = 0; i < numMonths; ++i) {
+  for (let i = 0; i <= numMonths; ++i) {
     const start = startMonth.clone().add(i, 'months').startOf('month')
     const end = start.clone().endOf('month')
     if (start.isAfter(Moment())) {
@@ -105,65 +126,93 @@ function getMonthlyStatsSince (startMonth, numMonths, twRows) {
 
 function getLicensesAfter (startDate, twRows) {
   return twRows
-  .filter((x) => x.subscription === 'premium')
-  .filter((x) => Moment(x.subscriptionStartDate).isAfter(startDate))
+  .filter(isActiveCustomer)
+  .filter(x => Moment(x.subscriptionStartDate).isAfter(startDate))
   .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
 }
 
 function getStatsForPeriod (startDate, endDate, twRows) {
-  const premiumRowsBeforePeriod = twRows
-  .filter((x) => x.subscription === 'premium')
-  .filter((x) => Moment(x.subscriptionStartDate).isBefore(startDate))
+  const activeCustomerRowsBeforePeriod = twRows
+  .filter(isActiveCustomer)
+  .filter(x => Moment(x.subscriptionStartDate).isBefore(startDate))
 
-  const licensesBeforePeriod = premiumRowsBeforePeriod
+  const licensesBeforePeriod = activeCustomerRowsBeforePeriod
   .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
 
-  const licensesFromRealCustomersBeforePeriod = premiumRowsBeforePeriod
-  .filter((x) => (
-    Math.abs(Moment(x.subscriptionStartDate)
-    .diff(Moment(x.subscriptionEndDate), 'days')) >= REAL_CUSTOMER_AFTER_SUBSCRIBED_DAYS
-  ))
+  const licensesFromRealCustomersBeforePeriod = activeCustomerRowsBeforePeriod
+  .filter(isRealCustomer)
   .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
 
   const licensesInPeriod = twRows
-  .filter((x) => x.subscription === 'premium')
-  .filter((x) => Moment(x.subscriptionStartDate).isBetween(startDate, endDate))
+  .filter(x => startedInPeriod(x, startDate, endDate))
   .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
 
-  const cancelledRowsInPeriod = twRows
-  .filter((x) => x.subscription === 'canceled')
-  .filter((x) => Moment(x.subscriptionEndDate).isBetween(startDate, endDate))
+  const churnedRowsInPeriod = twRows
+  .filter(x => isChurnedCustomerInPeriod(x, startDate, endDate))
 
-  const churnedLicensesInPeriod = cancelledRowsInPeriod
+  const churnedLicensesInPeriod = churnedRowsInPeriod
   .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
 
-  const churnedLicensesFromRealCustomersInPeriod = cancelledRowsInPeriod
-  .filter((x) => (
-    Math.abs(Moment(x.subscriptionStartDate)
-    .diff(Moment(x.subscriptionEndDate), 'days')) >= REAL_CUSTOMER_AFTER_SUBSCRIBED_DAYS
-  ))
+  const churnedLicensesFromRealCustomersInPeriod = churnedRowsInPeriod
+  .filter(isRealCustomer)
   .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
+
+  const churnRate = churnedLicensesInPeriod ? (churnedLicensesInPeriod / licensesBeforePeriod * 100).toFixed(2) : 0
+  const churnRateOptimistic = churnedLicensesFromRealCustomersInPeriod ? (churnedLicensesFromRealCustomersInPeriod / licensesFromRealCustomersBeforePeriod * 100).toFixed(2) : 0
 
   console.log(`
   Churn rate in period ${startDate.format('YYYY-MM-DD')} - ${endDate.format('YYYY-MM-DD')}:
-  Total:      ${churnedLicensesInPeriod} churned / ${licensesBeforePeriod} total licenses before period.
-  Optimistic: ${churnedLicensesFromRealCustomersInPeriod} churned / ${licensesFromRealCustomersBeforePeriod} total licenses before period.
+  =============================================
+  Total:      ${churnedLicensesInPeriod} churned / ${licensesBeforePeriod} total licenses before period ~= ${churnRate}
+  Optimistic: ${churnedLicensesFromRealCustomersInPeriod} churned / ${licensesFromRealCustomersBeforePeriod} total licenses before period ~= ${churnRateOptimistic}
+
+  Churned customers:
   `)
+  churnedRowsInPeriod.forEach(x => {
+    console.log(`  [${Moment(x.subscriptionEndDate).format('YYYY-MM-DD')}] - ${x.licenses} - ${x.workspaceDisplayName} / ${x.ownerName}`)
+  })
+
   return {
     churnedLicensesInPeriod,
     churnedLicensesFromRealCustomersInPeriod,
     licensesInPeriod,
     licensesBeforePeriod,
-    churnRate: churnedLicensesInPeriod
-      ? (churnedLicensesInPeriod / licensesBeforePeriod * 100).toFixed(2) : 0,
-    churnRateOptimistic: churnedLicensesFromRealCustomersInPeriod
-      ? (churnedLicensesFromRealCustomersInPeriod / licensesFromRealCustomersBeforePeriod * 100).toFixed(2) : 0
+    churnRate,
+    churnRateOptimistic
   }
+}
+
+function isRealCustomer (x) {
+  const subscriptionLengthInDays = Math.abs(Moment(x.subscriptionStartDate).diff(Moment(x.subscriptionEndDate), 'days'))
+  return subscriptionLengthInDays >= REAL_CUSTOMER_AFTER_SUBSCRIBED_DAYS
+}
+
+function isChurnedCustomerInPeriod (x, startDate, endDate) {
+  const active = _isActive(x)
+  return active.isBefore(Moment()) && active.isBetween(startDate, endDate)
+}
+
+function startedInPeriod (x, startDate, endDate) {
+  return Moment(x.subscriptionStartDate).isBetween(startDate, endDate)
+}
+
+function isChurnedCustomer (x) {
+  return _isActive(x).isBefore(Moment())
+}
+
+function isActiveCustomer (x) {
+  return _isActive(x).isAfter(Moment())
+}
+
+function _isActive (x) {
+  return x.billingCycle === 'monthly'
+  ? Moment(x.subscriptionEndDate).add(1, 'month').add(10, 'days')
+  : Moment(x.subscriptionEndDate).add(10, 'days')
 }
 
 function getAveragePurchaseTimeDays (twRows) {
   const rows = twRows
-  .filter((x) => x.subscription === 'premium')
+  .filter(isActiveCustomer)
   .filter((x) => (
     Moment(x.subscriptionStartDate).isAfter(Moment('2016-05-01')) &&
     Moment(x.workspaceCreatedDate).isAfter(Moment('2016-05-01'))

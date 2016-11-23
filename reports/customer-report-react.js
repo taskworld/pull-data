@@ -64,6 +64,10 @@ class App extends React.Component {
               <td>Average Days from Trial to Purchase:</td>
               <td className='percentage'>{report.averagePurchaseTimeDays}</td>
             </tr>
+            <tr>
+              <td>Average Monthly License Churn Rate:</td>
+              <td className='percentage'>{report.churnRateOptimisticMonthlyAverage.toFixed(2)} %</td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -144,7 +148,7 @@ class App extends React.Component {
     const { data } = this.props
 
     const churnedCustomersReport = data.rows
-    .filter(x => x.subscription !== 'premium')
+    .filter(x => !x.isActive)
     .map(x => {
       const copy = { ...x }
       copy.secondaryDate = moment(x.subscriptionEndDate, 'YYYY-MM-DD')
@@ -163,7 +167,7 @@ class App extends React.Component {
 
           {this.renderTable(
             'Active Customers',
-            data.rows.filter(x => x.subscription === 'premium')
+            data.rows.filter(x => x.isActive)
           )}
 
           <br/>
@@ -201,11 +205,8 @@ const ReportRow = ({ row, remaining, opts }) => {
   const newCls = classNames({
     'nowrap': true,
     'row-green': isWithinToday,
-    'row-amber': (
-      (!isWithinToday && isWithin48Hours) ||
-      (row.subscription === 'canceled' && !isBeforeToday)
-    ),
-    'row-red': row.subscription === 'canceled' && isBeforeToday
+    'row-amber': !isWithinToday && isWithin48Hours,
+    'row-red': !row.isActive
   })
 
   return (
@@ -224,6 +225,7 @@ const ReportRow = ({ row, remaining, opts }) => {
           ? row.secondaryDate.format('YYYY-MM-DD')
           : moment(row.subscriptionStartDate).format('YYYY-MM-DD')
         }
+        <div className='details'>{moment(row.subscriptionEndDate).format('YYYY-MM-DD')}</div>
       </td>
       <td>{row.paymentType}</td>
       <td className={newCls}>{row.licenses}</td>
