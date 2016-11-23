@@ -12,13 +12,15 @@
   },
   "author": "",
   "license": "ISC",
+  "optionalDependencies": {
+    "fsevents": "^1.0.15"
+  },
   "dependencies": {
     "aws-sdk": "^2.6.1",
     "bluebird": "^3.4.2",
     "braintree": "^1.41.0",
     "chalk": "^1.1.3",
     "fast-csv": "^2.1.0",
-    "fsevents": "^1.0.15",
     "googleapis": "^12.4.0",
     "mimer": "^0.2.1",
     "minimist": "^1.2.0",
