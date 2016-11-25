@@ -16,102 +16,108 @@ const _stats = {
 }
 
 function renderAdStatsReport () {
-  return P.all([
-    Util.readCsv('/tmp/adword-signups.csv'),
-    Util.readCsv('/tmp/adword-stats.csv'),
-    Util.readCsv('/tmp/adgroup-alltime-stats.csv'),
-    Util.readCsv('/tmp/tw-data.csv')
-  ])
-  .spread((signupRows, statsRows, adGroupStatsRows, twRows) => {
+  return P.props({
+    signupRows: Util.readCsv('/tmp/adword-signups.csv'),
+    adWordStatsRows: Util.readCsv('/tmp/adword-stats.csv'),
+    adGroupStatsRows: Util.readCsv('/tmp/adgroup-alltime-stats.csv'),
+    twRows: Util.readCsv('/tmp/tw-data.csv')
+  })
+  .then(opts => {
     // Rock on !
-
-    const emailToCustomerMap = getEmailToCustomerMap(twRows, signupRows)
-    console.log('Unique customers:', Object.keys(emailToCustomerMap).length)
-
-    const adGroupToEmailMap = getAdGroupToEmailMap(signupRows)
-    console.log('Emails unique:', Object.keys(_stats.emails).length)
-
-    // Add all customers for which we don’t have signup stats !
-    let missingSignupStats = 0
-    Object.keys(emailToCustomerMap).forEach(x => {
-      if (!_stats.emails[x]) {
-        adGroupToEmailMap['(not set)'].push(x)
-        ++missingSignupStats
-      }
-    })
-    console.log('Customers missing signup stats:', missingSignupStats)
-
     let statsReport = {
       sources: { },
       month: { },
-      adGroup: { },
-      country: { }
+      adGroup: { }
     }
 
-    statsReport = statsRows.reduce((acc, x) => {
-      const month = x['ga:year'] + x['ga:month']
-      const cost = parseFloat(x['ga:adCost'])
-      const clicks = parseInt(x['ga:adClicks'], 10)
-      const signups = parseInt(x['ga:goal7Completions'], 10) + parseInt(x['ga:goal9Completions'], 10)
-      const users = parseInt(x['ga:users'], 10)
-
-      if (!acc.month[month]) {
-        acc.month[month] = createStatsEntry()
-      }
-      acc.month[month].totalCostPaidMarketing += cost
-      acc.month[month].totalClicks += clicks
-      acc.month[month].totalSignups += signups
-      acc.month[month].totalUsers += users
-      if (cost > 0) {
-        acc.month[month].signupsPaidMarketing += signups
-      }
-      return acc
-    }, statsReport)
-
-    // console.log(JSON.stringify(statsReport, null, 2))
-
-    statsReport = adGroupStatsRows.reduce((acc, x) => {
-      const group = x['ga:adGroup']
-      const cost = parseFloat(x['ga:adCost'])
-      const clicks = parseInt(x['ga:adClicks'], 10)
-      const signups = parseInt(x['ga:goal7Completions'], 10) + parseInt(x['ga:goal9Completions'], 10)
-      const users = parseInt(x['ga:users'], 10)
-      if (!acc.adGroup[group]) {
-        acc.adGroup[group] = createStatsEntry()
-        acc.adGroup[group].customers = getCustomers(
-          adGroupToEmailMap[group], emailToCustomerMap
-        )
-      }
-      acc.adGroup[group].totalCostPaidMarketing += cost
-      acc.adGroup[group].totalClicks += clicks
-      acc.adGroup[group].totalSignups += signups
-      acc.adGroup[group].totalUsers += users
-      if (cost > 0) {
-        acc.adGroup[group].signupsPaidMarketing += signups
-      }
-      return acc
-    }, statsReport)
-
+    calculateAdWordStats(opts, statsReport)
+    calculateAdGroupStats(opts, statsReport)
     calculateCustomerStats(statsReport)
     calculateAcquisitionCosts(statsReport)
     calculateCountryTotals(statsReport)
 
+    // Print a bunch of stuff to check we’re doing it right !
     printAdGroupExample('(not set)', statsReport)
     printAdGroupExample('Trello', statsReport)
 
     console.log('Total Licenses:', Object.keys(statsReport.month)
     .reduce((acc, x) => acc + statsReport.month[x].totalLicenses, 0))
-
-    console.log('Total Licenses by Country:', statsReport.country
+    console.log('Total Licenses (sum all countries):', statsReport.licensesByCountry
+    .reduce((acc, x) => acc + x[1], 0))
+    console.log('Total Revenue (sum all countries):', statsReport.revenueByCountry
     .reduce((acc, x) => acc + x[1], 0))
 
+    console.log(`\nReport example month 2016-11:`)
     console.log(JSON.stringify(statsReport.month['201611'], null, 2))
 
+    // It’s a Done Deal.
     Fs.writeFileSync(
       '/tmp/marketing-performance-combined.json',
       JSON.stringify(statsReport, null, 2)
     )
   })
+}
+
+function calculateAdGroupStats (opts, statsReport) {
+  const emailToCustomerMap = getEmailToCustomerMap(opts.twRows, opts.signupRows)
+  console.log('Unique customers:', Object.keys(emailToCustomerMap).length)
+
+  const adGroupToEmailMap = getAdGroupToEmailMap(opts.signupRows)
+  console.log('Emails unique:', Object.keys(_stats.emails).length)
+
+  // Add all customers for which we don’t have signup stats !
+  let missingSignupStats = 0
+  Object.keys(emailToCustomerMap).forEach(x => {
+    if (!_stats.emails[x]) {
+      adGroupToEmailMap['(not set)'].push(x)
+      ++missingSignupStats
+    }
+  })
+  console.log('Customers missing signup stats:', missingSignupStats)
+
+  opts.adGroupStatsRows.reduce((acc, x) => {
+    const group = x['ga:adGroup']
+    const cost = parseFloat(x['ga:adCost'])
+    const clicks = parseInt(x['ga:adClicks'], 10)
+    const signups = parseInt(x['ga:goal7Completions'], 10) + parseInt(x['ga:goal9Completions'], 10)
+    const users = parseInt(x['ga:users'], 10)
+    if (!acc.adGroup[group]) {
+      acc.adGroup[group] = createStatsEntry()
+      acc.adGroup[group].customers = getCustomers(
+        adGroupToEmailMap[group], emailToCustomerMap
+      )
+    }
+    acc.adGroup[group].totalCostPaidMarketing += cost
+    acc.adGroup[group].totalClicks += clicks
+    acc.adGroup[group].totalSignups += signups
+    acc.adGroup[group].totalUsers += users
+    if (cost > 0) {
+      acc.adGroup[group].signupsPaidMarketing += signups
+    }
+    return acc
+  }, statsReport)
+}
+
+function calculateAdWordStats (opts, statsReport) {
+  opts.adWordStatsRows.reduce((acc, x) => {
+    const month = x['ga:year'] + x['ga:month']
+    const cost = parseFloat(x['ga:adCost'])
+    const clicks = parseInt(x['ga:adClicks'], 10)
+    const signups = parseInt(x['ga:goal7Completions'], 10) + parseInt(x['ga:goal9Completions'], 10)
+    const users = parseInt(x['ga:users'], 10)
+
+    if (!acc.month[month]) {
+      acc.month[month] = createStatsEntry()
+    }
+    acc.month[month].totalCostPaidMarketing += cost
+    acc.month[month].totalClicks += clicks
+    acc.month[month].totalSignups += signups
+    acc.month[month].totalUsers += users
+    if (cost > 0) {
+      acc.month[month].signupsPaidMarketing += signups
+    }
+    return acc
+  }, statsReport)
 }
 
 function printAdGroupExample (adGroupName, statsReport) {
@@ -123,21 +129,32 @@ function printAdGroupExample (adGroupName, statsReport) {
 
 function calculateCountryTotals (statsReport) {
   // Sum licences for each country of each AdGroup.
-  const c = statsReport.country
+  const c = { }
+
   Object.keys(statsReport.adGroup).forEach(adGroupName => {
     const adGroup = statsReport.adGroup[adGroupName]
     Object.keys(adGroup.licensesByCountry).forEach(countryName => {
-      const licenses = adGroup.licensesByCountry[countryName]
+      const licenses = adGroup.licensesByCountry[countryName] || 0
+      const revenue = adGroup.revenueByCountry[countryName] || 0
       if (!c[countryName]) {
-        c[countryName] = 0
+        c[countryName] = {
+          licenses: 0,
+          revenue: 0
+        }
       }
-      c[countryName] += licenses
+      c[countryName].licenses += licenses
+      c[countryName].revenue += revenue
     })
   })
 
-  const totals = Object.keys(c).map(x => [x, c[x]])
-  totals.sort((a, b) => a[1] < b[1] ? 1 : -1)
-  statsReport.country = totals
+  const licensesSorted = Object.keys(c).map(x => [x, c[x].licenses])
+  licensesSorted.sort((a, b) => a[1] < b[1] ? 1 : -1)
+
+  const revenueSorted = Object.keys(c).map(x => [x, c[x].revenue])
+  revenueSorted.sort((a, b) => a[1] < b[1] ? 1 : -1)
+
+  statsReport.licensesByCountry = licensesSorted
+  statsReport.revenueByCountry = revenueSorted
 }
 
 function calculateCustomerStats (statsReport) {
@@ -164,12 +181,22 @@ function calculateCustomerStats (statsReport) {
 
         // Calculate average license cost.
         if (customer.amount && licenses) {
-          const subscriptionCost = customer.amount / (customer.billingCycle === 'annually' ? 12 : 1)
+          const amount = parseFloat(customer.amount)
+          const subscriptionCost = amount / (customer.billingCycle === 'annually' ? 12 : 1)
           const costPerLicense = subscriptionCost / (licenses || 1)
           month.averageLicenseCost += costPerLicense
           month.licensesWithAmounts++
           adGroup.averageLicenseCost += costPerLicense
           adGroup.licensesWithAmounts++
+          // Count revenue per country per month and AdGroup.
+          if (!month.revenueByCountry[customer.country]) {
+            month.revenueByCountry[customer.country] = 0
+          }
+          month.revenueByCountry[customer.country] += amount
+          if (!adGroup.revenueByCountry[customer.country]) {
+            adGroup.revenueByCountry[customer.country] = 0
+          }
+          adGroup.revenueByCountry[customer.country] += amount
         }
 
         // Count licenses per country per month and AdGroup.
@@ -271,7 +298,8 @@ function createStatsEntry () {
     licensesPaidMarketingChurned: 0,
     averageLicenseCost: 0,
     licensesWithAmounts: 0,
-    licensesByCountry: { }
+    licensesByCountry: { },
+    revenueByCountry: { }
   }
 }
 
