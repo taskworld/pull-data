@@ -25,14 +25,11 @@ function renderAdStatsReport () {
   .spread((signupRows, statsRows, adGroupStatsRows, twRows) => {
     // Rock on !
 
-    const emailToCustomerMap = getEmailToCustomerMap(twRows)
+    const emailToCustomerMap = getEmailToCustomerMap(twRows, signupRows)
     console.log('Unique customers:', Object.keys(emailToCustomerMap).length)
 
     const adGroupToEmailMap = getAdGroupToEmailMap(signupRows)
     console.log('Emails unique:', Object.keys(_stats.emails).length)
-
-    // const sourceMediumToCustomerMap = getSourceMediumToCustomerMap(signupRows, emailToCustomerMap)
-    // console.log(JSON.stringify(sourceMediumToCustomerMap, null, 2))
 
     // Add all customers for which we don’t have signup stats !
     let missingSignupStats = 0
@@ -47,7 +44,8 @@ function renderAdStatsReport () {
     let statsReport = {
       sources: { },
       month: { },
-      adGroup: { }
+      adGroup: { },
+      country: { }
     }
 
     statsReport = statsRows.reduce((acc, x) => {
@@ -96,14 +94,18 @@ function renderAdStatsReport () {
 
     calculateCustomerStats(statsReport)
     calculateAcquisitionCosts(statsReport)
+    calculateCountryTotals(statsReport)
 
-    const example1 = Object.assign({ }, statsReport.adGroup['(not set)'])
-    example1.customers = example1.customers.length
-    console.log('Report example 1 (no AdGroup):')
-    console.log(JSON.stringify(example1, null, 2))
+    printAdGroupExample('(not set)', statsReport)
+    printAdGroupExample('Trello', statsReport)
 
     console.log('Total Licenses:', Object.keys(statsReport.month)
     .reduce((acc, x) => acc + statsReport.month[x].totalLicenses, 0))
+
+    console.log('Total Licenses by Country:', statsReport.country
+    .reduce((acc, x) => acc + x[1], 0))
+
+    console.log(JSON.stringify(statsReport.month['201611'], null, 2))
 
     Fs.writeFileSync(
       '/tmp/marketing-performance-combined.json',
@@ -112,12 +114,38 @@ function renderAdStatsReport () {
   })
 }
 
+function printAdGroupExample (adGroupName, statsReport) {
+  const e = Object.assign({ }, statsReport.adGroup[adGroupName])
+  e.customers = e.customers.length
+  console.log('Report example:', adGroupName)
+  console.log(JSON.stringify(e, null, 2))
+}
+
+function calculateCountryTotals (statsReport) {
+  // Sum licences for each country of each AdGroup.
+  const c = statsReport.country
+  Object.keys(statsReport.adGroup).forEach(adGroupName => {
+    const adGroup = statsReport.adGroup[adGroupName]
+    Object.keys(adGroup.licensesByCountry).forEach(countryName => {
+      const licenses = adGroup.licensesByCountry[countryName]
+      if (!c[countryName]) {
+        c[countryName] = 0
+      }
+      c[countryName] += licenses
+    })
+  })
+
+  const totals = Object.keys(c).map(x => [x, c[x]])
+  totals.sort((a, b) => a[1] < b[1] ? 1 : -1)
+  statsReport.country = totals
+}
+
 function calculateCustomerStats (statsReport) {
   // Sum licences for each AdGroup.
-  Object.keys(statsReport.adGroup).forEach(adGroup => {
-    const adGroupRef = statsReport.adGroup[adGroup]
-    adGroupRef.customers.forEach(customer => {
-      let m
+  Object.keys(statsReport.adGroup).forEach(adGroupName => {
+    const adGroup = statsReport.adGroup[adGroupName]
+    adGroup.customers.forEach(customer => {
+      let month
       const licenses = parseInt(customer.licenses, 10)
       const isActive = isActiveCustomer(customer)
 
@@ -125,60 +153,58 @@ function calculateCustomerStats (statsReport) {
         // Is active.
         const workspaceDate = Moment(customer.workspaceCreatedDate)
         const workspaceMonth = workspaceDate.format('YYYYMM')
-        m = statsReport.month[workspaceMonth]
-        if (!m) {
-          m = statsReport.month[workspaceMonth] = createStatsEntry()
+        month = statsReport.month[workspaceMonth]
+        if (!month) {
+          month = statsReport.month[workspaceMonth] = createStatsEntry()
         }
-        m.totalCustomers++
-        m.totalLicenses += licenses
-        adGroupRef.totalLicenses += licenses
+        month.totalCustomers++
+        month.totalLicenses += licenses
+        adGroup.totalCustomers++
+        adGroup.totalLicenses += licenses
 
-        // Add average license cost.
+        // Calculate average license cost.
         if (customer.amount && licenses) {
           const subscriptionCost = customer.amount / (customer.billingCycle === 'annually' ? 12 : 1)
           const costPerLicense = subscriptionCost / (licenses || 1)
-          m.averageLicenseCost += costPerLicense
-          m.licensesWithAmounts++
-          adGroupRef.averageLicenseCost += costPerLicense
-          adGroupRef.licensesWithAmounts++
+          month.averageLicenseCost += costPerLicense
+          month.licensesWithAmounts++
+          adGroup.averageLicenseCost += costPerLicense
+          adGroup.licensesWithAmounts++
         }
 
-        addWeekStat(statsReport, workspaceDate, 'totalLicenses', licenses)
-        addWeekStat(adGroupRef, workspaceDate, 'totalLicenses', licenses)
+        // Count licenses per country per month and AdGroup.
+        if (!month.licensesByCountry[customer.country]) {
+          month.licensesByCountry[customer.country] = 0
+        }
+        month.licensesByCountry[customer.country] += licenses
+        if (!adGroup.licensesByCountry[customer.country]) {
+          adGroup.licensesByCountry[customer.country] = 0
+        }
+        adGroup.licensesByCountry[customer.country] += licenses
 
-        if (adGroup !== '(not set)') {
-          m.licensesPaidMarketing += licenses
-          adGroupRef.licensesPaidMarketing += licenses
-          addWeekStat(statsReport, workspaceDate, 'licensesPaidMarketing', licenses)
-          addWeekStat(adGroupRef, workspaceDate, 'licensesPaidMarketing', licenses)
+        if (adGroupName !== '(not set)') {
+          month.licensesPaidMarketing += licenses
+          adGroup.licensesPaidMarketing += licenses
         }
       } else {
         // Is churned.
         const endDate = Moment(customer.subscriptionEndDate)
         const endMonth = endDate.format('YYYYMM')
-        m = statsReport.month[endMonth]
-        if (!m) {
-          m = statsReport.month[endMonth] = createStatsEntry()
+        month = statsReport.month[endMonth]
+        if (!month) {
+          month = statsReport.month[endMonth] = createStatsEntry()
         }
 
-        m.totalLicensesChurned += licenses
-        adGroupRef.totalLicensesChurned += licenses
-        addWeekStat(statsReport, endDate, 'totalLicensesChurned', licenses)
-        addWeekStat(adGroupRef, endDate, 'totalLicensesChurned', licenses)
+        month.totalLicensesChurned += licenses
+        adGroup.totalLicensesChurned += licenses
 
-        if (adGroup !== '(not set)') {
-          m.licensesPaidMarketingChurned += licenses
-          adGroupRef.licensesPaidMarketingChurned += licenses
-          addWeekStat(statsReport, endDate, 'licensesPaidMarketingChurned', licenses)
-          addWeekStat(adGroupRef, endDate, 'licensesPaidMarketingChurned', licenses)
+        if (adGroupName !== '(not set)') {
+          month.licensesPaidMarketingChurned += licenses
+          adGroup.licensesPaidMarketingChurned += licenses
         }
       }
     })
   })
-}
-
-function isChurnedCustomer (x) {
-  return _isActive(x).isBefore(Moment())
 }
 
 function isActiveCustomer (x) {
@@ -244,16 +270,23 @@ function createStatsEntry () {
     licensesPaidMarketing: 0,
     licensesPaidMarketingChurned: 0,
     averageLicenseCost: 0,
-    licensesWithAmounts: 0
+    licensesWithAmounts: 0,
+    licensesByCountry: { }
   }
 }
 
-function getEmailToCustomerMap (twRows) {
+function getEmailToCustomerMap (twRows, signupRows) {
+  const emailToCountryMap = signupRows.reduce((acc, x) => {
+    acc[x['ga:eventLabel']] = x['ga:country']
+    return acc
+  }, { })
+
   return twRows.reduce((acc, x) => {
     const email = x['ownerEmail']
     if (!acc[email]) {
       acc[email] = []
     }
+    x.country = emailToCountryMap[email] || 'unknown'
     acc[email].push(x)
     return acc
   }, { })
@@ -279,35 +312,4 @@ function getAdGroupToEmailMap (signupRows) {
 
     return acc
   }, { })
-}
-
-function getSourceMediumToCustomerMap (signupRows, emailToCustomerMap) {
-  return signupRows.reduce((acc, x) => {
-    const source = x['ga:sourceMedium']
-    const email = x['ga:eventLabel']
-    const customer = emailToCustomerMap[email]
-    if (customer) {
-      if (!acc[source]) {
-        acc[source] = []
-      }
-      // console.log('customer', customer)
-      acc[source] = acc[source].concat(customer)
-    }
-    return acc
-  }, { })
-}
-
-function addWeekStat (entry, date, key, value) {
-  // NOTE: Don’t do this for now.
-  return
-  // // Create a map holding week stats.
-  // if (!entry.weeks) {
-  //   entry.weeks = { }
-  // }
-  // const week = date.format('YYYY[_]WW')
-  // let w = entry.weeks[week]
-  // if (!w) {
-  //   w = entry.weeks[week] = createStatsEntry()
-  // }
-  // w[key] += value
 }
