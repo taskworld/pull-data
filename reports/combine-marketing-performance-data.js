@@ -15,6 +15,27 @@ const _stats = {
   workspaces: { }
 }
 
+// HACK: Hardcoded campaigns to geos lookup.
+const _campaigns = {
+  '353481534': 'AU,NZ',
+  '316136334': 'GLOBAL',
+  '353475894': 'GB,IE',
+  '668977347': 'CA',
+  '351333654': 'US',
+  '353482254': 'TH',
+  '635558054': 'HK',
+  '660546168': 'AE',
+  '658745451': 'IN',
+  '693549483': 'ES',
+  '635558639': 'SA',
+  '670384709': 'DE,AU,CH',
+  '665343797': 'FR',
+  '695256601': 'SE,DK,NO,FI',
+  '619677960': 'SG',
+  '657886988': 'US,GB,AU,NZ,SA,IE',
+  '693547326': 'BR'
+}
+
 function renderAdStatsReport () {
   return P.props({
     signupRows: Util.readCsv('/tmp/adword-signups.csv'),
@@ -34,7 +55,6 @@ function renderAdStatsReport () {
     calculateAdGroupStats(opts, statsReport)
     calculateCustomerStats(statsReport)
     calculateAcquisitionCosts(statsReport)
-    calculateCountryTotals(statsReport)
 
     // Print a bunch of stuff to check we’re doing it right !
     printAdGroupExample('(not set)', statsReport)
@@ -42,10 +62,16 @@ function renderAdStatsReport () {
 
     console.log('Total Licenses:', Object.keys(statsReport.month)
     .reduce((acc, x) => acc + statsReport.month[x].totalLicenses, 0))
-    console.log('Total Licenses (sum all countries):', statsReport.licensesByCountry
-    .reduce((acc, x) => acc + x[1], 0))
-    console.log('Total Revenue (sum all countries):', statsReport.revenueByCountry
-    .reduce((acc, x) => acc + x[1], 0))
+
+    const sumLicensesFromCampaigns = Object.keys(statsReport.month).reduce((acc, month) => {
+      const stats = statsReport.month[month]
+      Object.keys(stats.byCampaign).forEach(campaignId => {
+        acc += stats.byCampaign[campaignId].licenses
+      })
+      return acc
+    }, 0)
+
+    console.log('Total Licenses (campaigns):', sumLicensesFromCampaigns)
 
     console.log(`\nReport example month 2016-11:`)
     console.log(JSON.stringify(statsReport.month['201611'], null, 2))
@@ -127,36 +153,6 @@ function printAdGroupExample (adGroupName, statsReport) {
   console.log(JSON.stringify(e, null, 2))
 }
 
-function calculateCountryTotals (statsReport) {
-  // Sum licences for each country of each AdGroup.
-  const c = { }
-
-  Object.keys(statsReport.adGroup).forEach(adGroupName => {
-    const adGroup = statsReport.adGroup[adGroupName]
-    Object.keys(adGroup.licensesByCountry).forEach(countryName => {
-      const licenses = adGroup.licensesByCountry[countryName] || 0
-      const revenue = adGroup.revenueByCountry[countryName] || 0
-      if (!c[countryName]) {
-        c[countryName] = {
-          licenses: 0,
-          revenue: 0
-        }
-      }
-      c[countryName].licenses += licenses
-      c[countryName].revenue += revenue
-    })
-  })
-
-  const licensesSorted = Object.keys(c).map(x => [x, c[x].licenses])
-  licensesSorted.sort((a, b) => a[1] < b[1] ? 1 : -1)
-
-  const revenueSorted = Object.keys(c).map(x => [x, c[x].revenue])
-  revenueSorted.sort((a, b) => a[1] < b[1] ? 1 : -1)
-
-  statsReport.licensesByCountry = licensesSorted
-  statsReport.revenueByCountry = revenueSorted
-}
-
 function calculateCustomerStats (statsReport) {
   // Sum licences for each AdGroup.
   Object.keys(statsReport.adGroup).forEach(adGroupName => {
@@ -179,6 +175,17 @@ function calculateCustomerStats (statsReport) {
         adGroup.totalCustomers++
         adGroup.totalLicenses += licenses
 
+        const campaignId = customer.campaign !== 'no signup data'
+          ? `${customer.campaignCountry} - ${customer.campaign}`
+          : 'no signup data'
+
+        if (!month.byCampaign[campaignId]) {
+          month.byCampaign[campaignId] = { licenses: 0, mrr: 0 }
+        }
+        if (!adGroup.byCampaign[campaignId]) {
+          adGroup.byCampaign[campaignId] = { licenses: 0, mrr: 0 }
+        }
+
         // Calculate average license cost.
         if (customer.amount && licenses) {
           const amount = parseFloat(customer.amount)
@@ -188,26 +195,15 @@ function calculateCustomerStats (statsReport) {
           month.licensesWithAmounts++
           adGroup.averageLicenseCost += costPerLicense
           adGroup.licensesWithAmounts++
-          // Count revenue per country per month and AdGroup.
-          if (!month.revenueByCountry[customer.country]) {
-            month.revenueByCountry[customer.country] = 0
-          }
-          month.revenueByCountry[customer.country] += amount
-          if (!adGroup.revenueByCountry[customer.country]) {
-            adGroup.revenueByCountry[customer.country] = 0
-          }
-          adGroup.revenueByCountry[customer.country] += amount
+
+          // Count monthly recurring revenue per campaign.
+          month.byCampaign[campaignId].mrr += subscriptionCost
+          adGroup.byCampaign[campaignId].mrr += subscriptionCost
         }
 
-        // Count licenses per country per month and AdGroup.
-        if (!month.licensesByCountry[customer.country]) {
-          month.licensesByCountry[customer.country] = 0
-        }
-        month.licensesByCountry[customer.country] += licenses
-        if (!adGroup.licensesByCountry[customer.country]) {
-          adGroup.licensesByCountry[customer.country] = 0
-        }
-        adGroup.licensesByCountry[customer.country] += licenses
+        // Count licenses per campaign.
+        month.byCampaign[campaignId].licenses += licenses
+        adGroup.byCampaign[campaignId].licenses += licenses
 
         if (adGroupName !== '(not set)') {
           month.licensesPaidMarketing += licenses
@@ -298,23 +294,35 @@ function createStatsEntry () {
     licensesPaidMarketingChurned: 0,
     averageLicenseCost: 0,
     licensesWithAmounts: 0,
-    licensesByCountry: { },
-    revenueByCountry: { }
+    byCampaign: { }
   }
 }
 
 function getEmailToCustomerMap (twRows, signupRows) {
-  const emailToCountryMap = signupRows.reduce((acc, x) => {
-    acc[x['ga:eventLabel']] = x['ga:country']
+  const emailToSignupInfoMap = signupRows.reduce((acc, x) => {
+    acc[x['ga:eventLabel']] = {
+      country: x['ga:country'],
+      campaign: x['ga:adwordsCampaignID'],
+      campaignCountry: _campaigns[x['ga:adwordsCampaignID']] || '(not set)'
+    }
     return acc
   }, { })
+
+  const signupInfoDefaults = {
+    country: 'no signup data',
+    campaign: 'no signup data',
+    campaignCountry: ''
+  }
 
   return twRows.reduce((acc, x) => {
     const email = x['ownerEmail']
     if (!acc[email]) {
       acc[email] = []
     }
-    x.country = emailToCountryMap[email] || 'unknown'
+
+    // Add signup info to Taskworld data.
+    Object.assign(x, signupInfoDefaults, emailToSignupInfoMap[email] || { })
+
     acc[email].push(x)
     return acc
   }, { })
