@@ -227,9 +227,7 @@ function isActiveCustomer (x) {
 }
 
 function _isActive (x) {
-  return x.billingCycle === 'monthly'
-  ? Moment(x.subscriptionEndDate).add(1, 'month').add(10, 'days')
-  : Moment(x.subscriptionEndDate).add(10, 'days')
+  return Moment(x.subscriptionEndDate).add(6, 'weeks')
 }
 
 function getAveragePurchaseTimeDays (twRows) {
