@@ -19,75 +19,12 @@ function round (number, precision) {
  * ============================================================================
  */
 class MonthlyReport extends React.Component {
-  renderTable (title, report) {
+  renderTable (title, report, perCampaign) {
     return (
       <div>
         <h1>{title}</h1>
         <table className='table table-hover table-inverse tw-report-table' style={{ whiteSpace: 'nowrap' }}>
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>
-                Marketing
-                <div className='details'>Paid Traffic</div>
-              </th>
-              <th>
-                Unique Visits
-                <div className='details'>Total</div>
-              </th>
-              <th>
-                Clicks
-                <div className='details'>Paid Traffic</div>
-              </th>
-              <th>
-                Signups
-                <div className='details'>Total</div>
-              </th>
-              <th>
-                Signups
-                <div className='details'>Paid Traffic</div>
-              </th>
-              <th>
-                Licenses
-                <div className='details'>Total</div>
-              </th>
-              <th>
-                Licenses
-                <div className='details'>Paid Traffic</div>
-              </th>
-
-              <th>
-                Cost / License
-                <div className='details'>Total</div>
-              </th>
-              <th>
-                Cost / License
-                <div className='details'>Paid Traffic</div>
-              </th>
-              <th>
-                Cost / Signup
-                <div className='details'>Paid Traffic</div>
-              </th>
-
-              <th>
-                Churned
-                <div className='details'>Licenses</div>
-              </th>
-              <th>
-                MRR
-                <div className='details'>Estimate</div>
-              </th>
-
-              <th>
-                CR
-                <div className='details'>Signup to Paid</div>
-              </th>
-              <th>
-                CR
-                <div className='details'>Visit to Paid</div>
-              </th>
-            </tr>
-          </thead>
+          <MonthlyReportHeaderRow />
           <tbody>
             {report.map((x, i) => (
               <MonthlyReportRow key={i} row={x} />
@@ -108,7 +45,7 @@ class MonthlyReport extends React.Component {
     .filter(x => x <= thisMonth)
     .map(x => {
       const r = report.month[x]
-      r.date = moment(x, 'YYYYMM')
+      r.date = `${x.substr(0, 4)}-${x.substr(4, 2)}`
       return r
     })
 
@@ -127,14 +64,83 @@ MonthlyReport.propTypes = {
   report: React.PropTypes.array.isRequired
 }
 
-const MonthlyReportRow = ({ row }) => {
+const MonthlyReportHeaderRow = ({ perCampaign }) => (
+  <thead>
+    <tr>
+      <th>Date</th>
+      {perCampaign ? <th>Campaign</th> : null}
+      <th>
+        Marketing
+        <div className='details'>Paid Traffic</div>
+      </th>
+      <th>
+        Unique Visits
+        <div className='details'>Total</div>
+      </th>
+      <th>
+        Clicks
+        <div className='details'>Paid Traffic</div>
+      </th>
+      <th>
+        Signups
+        <div className='details'>Total</div>
+      </th>
+      <th>
+        Signups
+        <div className='details'>Paid Traffic</div>
+      </th>
+      <th>
+        Licenses
+        <div className='details'>Total</div>
+      </th>
+      <th>
+        Licenses
+        <div className='details'>Paid Traffic</div>
+      </th>
+
+      <th>
+        Cost / License
+        <div className='details'>Total</div>
+      </th>
+      <th>
+        Cost / License
+        <div className='details'>Paid Traffic</div>
+      </th>
+      <th>
+        Cost / Signup
+        <div className='details'>Paid Traffic</div>
+      </th>
+
+      <th>
+        Churned
+        <div className='details'>Licenses</div>
+      </th>
+      <th>
+        MRR
+        <div className='details'>Estimate</div>
+      </th>
+
+      <th>
+        CR
+        <div className='details'>Signup to Paid</div>
+      </th>
+      <th>
+        CR
+        <div className='details'>Visit to Paid</div>
+      </th>
+    </tr>
+  </thead>
+)
+
+const MonthlyReportRow = ({ row, perCampaign }) => {
   const style = { textAlign: 'right' }
   const percentagePaidVsUnpaid = row.totalLicenses
     ? Math.round(row.licensesPaidMarketing / row.totalLicenses * 100)
     : null
   return (
     <tr>
-      <td style={style}>{row.date.format('YYYY-MM')}</td>
+      <td style={style}>{row.date}</td>
+      {perCampaign ? <td style={style}>{row.campaignLabel}</td> : null}
       <td style={style}>$ {round(row.totalCostPaidMarketing, 2).toLocaleString()}</td>
       <td style={style}>{row.totalUsers.toLocaleString()}</td>
       <td style={style}>{row.totalClicks.toLocaleString()}</td>
@@ -148,7 +154,7 @@ const MonthlyReportRow = ({ row }) => {
         </div>
       </td>
 
-      <td style={style}>$ {round(row.costPerLicenseAllChannels, 2).toLocaleString()}</td>
+      <td style={{ ...style, paddingLeft: 50 }}>$ {round(row.costPerLicenseAllChannels, 2).toLocaleString()}</td>
       <td style={style}>$ {round(row.costPerLicensePaidMarketing, 2).toLocaleString()}</td>
       <td style={style}>$ {round(row.costPerSignupPaidMarketing, 2).toLocaleString()}</td>
 
@@ -161,7 +167,7 @@ const MonthlyReportRow = ({ row }) => {
   )
 }
 
-const MonthlyTotalRow = ({ report }) => {
+const MonthlyTotalRow = ({ report, perCampaign }) => {
   const style = { textAlign: 'right' }
 
   const getTotal = (field) => report.reduce((acc, x) => acc + x[field], 0)
@@ -176,6 +182,7 @@ const MonthlyTotalRow = ({ report }) => {
   return (
     <tr style={{ backgroundColor: '#4cb992', color: 'white' }}>
       <td style={style}>Total</td>
+      {perCampaign ? <td></td> : null}
       <td style={style}>$ {round(getTotal('totalCostPaidMarketing'), 2).toLocaleString()}</td>
       <td style={style}>{getTotal('totalUsers').toLocaleString()}</td>
       <td style={style}>{getTotal('totalClicks').toLocaleString()}</td>
@@ -200,49 +207,22 @@ const MonthlyTotalRow = ({ report }) => {
 /*
  * ============================================================================
  *
- * Monthly Campaign Report (Revenue per Campaign)
+ * Monthly Report per Campaign
  *
  * ============================================================================
  */
 class MonthlyCampaignReport extends React.Component {
-  renderTable (title, report) {
-    // Create report rows for each month and country.
-    const reportRows = report.reduce((acc, row) => {
-      const countryRows = Object.keys(row.byCampaign)
-      .map(campaignId => ({
-        date: row.date,
-        campaignId,
-        licenses: row.byCampaign[campaignId].licenses,
-        mrr: row.byCampaign[campaignId].mrr
-      }))
-      countryRows.sort((a, b) => a.licenses < b.licenses ? 1 : -1)
-      acc = acc.concat(countryRows)
-      return acc
-    }, [])
-
+  renderTable (title, reportRows) {
     return (
-      <div style={{ marginLeft: 10 }}>
+      <div>
         <h1>{title}</h1>
-        <table className='table table-hover table-inverse tw-report-table'
-          style={{ whiteSpace: 'nowrap', width: 330 }}>
-          <thead>
-            <tr>
-              <th>Campaign ID</th>
-              <th>
-                Licenses
-                <div className='details'>Paid Traffic</div>
-              </th>
-              <th>
-                MRR
-                <div className='details'>Total</div>
-              </th>
-            </tr>
-          </thead>
+        <table className='table table-hover table-inverse tw-report-table' style={{ whiteSpace: 'nowrap' }}>
+          <MonthlyReportHeaderRow perCampaign />
           <tbody>
             {reportRows.map((x, i) => (
-              <MonthlyCampaignReportRow key={i} row={x} />
+              <MonthlyReportRow key={i} row={x} perCampaign />
             ))}
-            <MonthlyCampaignTotalRow key='total' report={reportRows} />
+            <MonthlyTotalRow key='total' report={reportRows} perCampaign />
           </tbody>
         </table>
       </div>
@@ -252,26 +232,39 @@ class MonthlyCampaignReport extends React.Component {
     const { report } = this.props
 
     const thisMonth = moment().format('YYYYMM')
-    const months = Object.keys(report.month)
+    let months = Object.keys(report.month)
     months.sort((a, b) => b > a ? 1 : -1)
-    const monthRows = months
-    .filter(x => x <= thisMonth)
-    .map(x => {
-      const r = report.month[x]
-      r.date = moment(x, 'YYYYMM')
-      return r
-    })
+    months = months.filter(x => x <= thisMonth)
+
+    const campaignGroups = months.reduce((acc, date) => {
+      const r = report.month[date]
+      Object.keys(r.byCampaign).forEach(campaignLabel => {
+        const c = r.byCampaign[campaignLabel]
+        c.date = `${date.substr(0, 4)}-${date.substr(4, 2)}`
+        c.campaignLabel = campaignLabel
+        if (!acc[campaignLabel]) {
+          acc[campaignLabel] = []
+        }
+        acc[campaignLabel].push(c)
+      })
+      return acc
+    }, { })
+
+    const campaignOrder = Object.keys(campaignGroups)
+    campaignOrder.sort()
+
+    const campaignRows = campaignOrder.reduce((acc, campaignLabel) => {
+      const rows = campaignGroups[campaignLabel]
+      rows.sort((a, b) => b.date > a.date ? 1 : -1)
+      acc = acc.concat(rows)
+      return acc
+    }, [])
 
     return (
       <div className='tw-report'>
         <div className='inner'>
           <hr/>
-          <h1>Ad Campaigns By Month</h1>
-          <div style={{ display: 'flex' }}>
-            {this.renderTable(monthRows[2].date.format('YYYY-MM'), monthRows.slice(2, 3))}
-            {this.renderTable(monthRows[1].date.format('YYYY-MM'), monthRows.slice(1, 2))}
-            {this.renderTable(monthRows[0].date.format('YYYY-MM'), monthRows.slice(0, 1))}
-          </div>
+          {this.renderTable('Monthly Campaign Stats', campaignRows)}
         </div>
       </div>
     )
@@ -280,29 +273,6 @@ class MonthlyCampaignReport extends React.Component {
 
 MonthlyCampaignReport.propTypes = {
   report: React.PropTypes.array.isRequired
-}
-
-const MonthlyCampaignReportRow = ({ row }) => {
-  const style = { textAlign: 'right' }
-  return (
-    <tr>
-      <td>{row.campaignId}</td>
-      <td style={style}>{row.licenses.toLocaleString()}</td>
-      <td style={style}>$ {round(row.mrr, 2).toLocaleString()}</td>
-    </tr>
-  )
-}
-
-const MonthlyCampaignTotalRow = ({ report }) => {
-  const style = { textAlign: 'right' }
-  const getTotal = (field) => report.reduce((acc, x) => acc + x[field], 0)
-  return (
-    <tr style={{ backgroundColor: '#4cb992', color: 'white' }}>
-      <td>Total</td>
-      <td style={style}>{getTotal('licenses').toLocaleString()}</td>
-      <td style={style}>$ {getTotal('mrr').toLocaleString()}</td>
-    </tr>
-  )
 }
 
 /*

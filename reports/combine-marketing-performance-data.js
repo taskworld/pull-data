@@ -64,13 +64,12 @@ function renderAdStatsReport () {
     .reduce((acc, x) => acc + statsReport.month[x].totalLicenses, 0))
 
     const sumLicensesFromCampaigns = Object.keys(statsReport.month).reduce((acc, month) => {
-      const stats = statsReport.month[month]
-      Object.keys(stats.byCampaign).forEach(campaignId => {
-        acc += stats.byCampaign[campaignId].licenses
+      const m = statsReport.month[month]
+      Object.keys(m.byCampaign).forEach(campaignLabel => {
+        acc += m.byCampaign[campaignLabel].totalLicenses
       })
       return acc
     }, 0)
-
     console.log('Total Licenses (campaigns):', sumLicensesFromCampaigns)
 
     console.log(`\nReport example month 2016-11:`)
@@ -107,21 +106,51 @@ function calculateAdGroupStats (opts, statsReport) {
     const clicks = parseInt(x['ga:adClicks'], 10)
     const signups = parseInt(x['ga:goal7Completions'], 10) + parseInt(x['ga:goal9Completions'], 10)
     const users = parseInt(x['ga:users'], 10)
+    const campaignLabel = getCampaignLabel(x)
+
     if (!acc.adGroup[group]) {
       acc.adGroup[group] = createStatsEntry()
+      acc.adGroup[group].byCampaign = { }
       acc.adGroup[group].customers = getCustomers(
         adGroupToEmailMap[group], emailToCustomerMap
       )
     }
-    acc.adGroup[group].totalCostPaidMarketing += cost
-    acc.adGroup[group].totalClicks += clicks
-    acc.adGroup[group].totalSignups += signups
-    acc.adGroup[group].totalUsers += users
-    if (cost > 0) {
-      acc.adGroup[group].signupsPaidMarketing += signups
+
+    const m1 = acc.adGroup[group]
+    if (!m1.byCampaign[campaignLabel]) {
+      m1.byCampaign[campaignLabel] = createStatsEntry()
     }
+    const m2 = m1.byCampaign[campaignLabel]
+
+    // Stats per ad group.
+    m1.totalCostPaidMarketing += cost
+    m1.totalClicks += clicks
+    m1.totalSignups += signups
+    m1.totalUsers += users
+    if (cost > 0) {
+      m1.signupsPaidMarketing += signups
+    }
+
+    // Stats per ad group per campaign.
+    m2.totalCostPaidMarketing += cost
+    m2.totalClicks += clicks
+    m2.totalSignups += signups
+    m2.totalUsers += users
+    if (cost > 0) {
+      m2.signupsPaidMarketing += signups
+    }
+
     return acc
   }, statsReport)
+}
+
+function getCampaignLabel (row) {
+  if (!row) {
+    return '[unknown campaign]'
+  }
+  const campaignId = typeof row === 'object' ? row['ga:adwordsCampaignID'] : row
+  const label = _campaigns[campaignId] || '[unknown target]'
+  return `${label} - ${campaignId}`
 }
 
 function calculateAdWordStats (opts, statsReport) {
@@ -131,17 +160,37 @@ function calculateAdWordStats (opts, statsReport) {
     const clicks = parseInt(x['ga:adClicks'], 10)
     const signups = parseInt(x['ga:goal7Completions'], 10) + parseInt(x['ga:goal9Completions'], 10)
     const users = parseInt(x['ga:users'], 10)
+    const campaignLabel = getCampaignLabel(x)
 
     if (!acc.month[month]) {
       acc.month[month] = createStatsEntry()
+      acc.month[month].byCampaign = { }
     }
-    acc.month[month].totalCostPaidMarketing += cost
-    acc.month[month].totalClicks += clicks
-    acc.month[month].totalSignups += signups
-    acc.month[month].totalUsers += users
+
+    const m1 = acc.month[month]
+    if (!m1.byCampaign[campaignLabel]) {
+      m1.byCampaign[campaignLabel] = createStatsEntry()
+    }
+    const m2 = m1.byCampaign[campaignLabel]
+
+    // Stats per month.
+    m1.totalCostPaidMarketing += cost
+    m1.totalClicks += clicks
+    m1.totalSignups += signups
+    m1.totalUsers += users
     if (cost > 0) {
-      acc.month[month].signupsPaidMarketing += signups
+      m1.signupsPaidMarketing += signups
     }
+
+    // Stats per month per campaign.
+    m2.totalCostPaidMarketing += cost
+    m2.totalClicks += clicks
+    m2.totalSignups += signups
+    m2.totalUsers += users
+    if (cost > 0) {
+      m2.signupsPaidMarketing += signups
+    }
+
     return acc
   }, statsReport)
 }
@@ -161,30 +210,37 @@ function calculateCustomerStats (statsReport) {
       let month
       const licenses = parseInt(customer.licenses, 10)
       const isActive = isActiveCustomer(customer)
+      const campaignLabel = getCampaignLabel(customer.campaign)
+
+      if (!adGroup.byCampaign[campaignLabel]) {
+        adGroup.byCampaign[campaignLabel] = createStatsEntry()
+      }
 
       if (isActive) {
         // Is active.
         const workspaceDate = Moment(customer.workspaceCreatedDate)
         const workspaceMonth = workspaceDate.format('YYYYMM')
+
         month = statsReport.month[workspaceMonth]
         if (!month) {
           month = statsReport.month[workspaceMonth] = createStatsEntry()
+          month.byCampaign = { }
         }
+        if (!month.byCampaign[campaignLabel]) {
+          month.byCampaign[campaignLabel] = createStatsEntry()
+        }
+
+        // Total licenses for month.
         month.totalCustomers++
         month.totalLicenses += licenses
         adGroup.totalCustomers++
         adGroup.totalLicenses += licenses
 
-        const campaignId = customer.campaign !== 'no signup data'
-          ? `${customer.campaignCountry} - ${customer.campaign}`
-          : 'no signup data'
-
-        if (!month.byCampaign[campaignId]) {
-          month.byCampaign[campaignId] = { licenses: 0, mrr: 0 }
-        }
-        if (!adGroup.byCampaign[campaignId]) {
-          adGroup.byCampaign[campaignId] = { licenses: 0, mrr: 0 }
-        }
+        // Total licenses for campaign in month.
+        month.byCampaign[campaignLabel].totalCustomers++
+        month.byCampaign[campaignLabel].totalLicenses += licenses
+        adGroup.byCampaign[campaignLabel].totalCustomers++
+        adGroup.byCampaign[campaignLabel].totalLicenses += licenses
 
         // Calculate average license cost.
         if (customer.amount && licenses) {
@@ -197,17 +253,15 @@ function calculateCustomerStats (statsReport) {
           adGroup.licensesWithAmounts++
 
           // Count monthly recurring revenue per campaign.
-          month.byCampaign[campaignId].mrr += subscriptionCost
-          adGroup.byCampaign[campaignId].mrr += subscriptionCost
+          month.byCampaign[campaignLabel].monthlyRecurringRevenue += subscriptionCost
+          adGroup.byCampaign[campaignLabel].monthlyRecurringRevenue += subscriptionCost
         }
-
-        // Count licenses per campaign.
-        month.byCampaign[campaignId].licenses += licenses
-        adGroup.byCampaign[campaignId].licenses += licenses
 
         if (adGroupName !== '(not set)') {
           month.licensesPaidMarketing += licenses
           adGroup.licensesPaidMarketing += licenses
+          month.byCampaign[campaignLabel].licensesPaidMarketing += licenses
+          adGroup.byCampaign[campaignLabel].licensesPaidMarketing += licenses
         }
       } else {
         // Is churned.
@@ -217,13 +271,20 @@ function calculateCustomerStats (statsReport) {
         if (!month) {
           month = statsReport.month[endMonth] = createStatsEntry()
         }
+        if (!month.byCampaign[campaignLabel]) {
+          month.byCampaign[campaignLabel] = createStatsEntry()
+        }
 
         month.totalLicensesChurned += licenses
         adGroup.totalLicensesChurned += licenses
+        month.byCampaign[campaignLabel].totalLicensesChurned += licenses
+        adGroup.byCampaign[campaignLabel].totalLicensesChurned += licenses
 
         if (adGroupName !== '(not set)') {
           month.licensesPaidMarketingChurned += licenses
           adGroup.licensesPaidMarketingChurned += licenses
+          month.byCampaign[campaignLabel].licensesPaidMarketingChurned += licenses
+          adGroup.byCampaign[campaignLabel].licensesPaidMarketingChurned += licenses
         }
       }
     })
@@ -251,8 +312,14 @@ function calcStats (e) {
 }
 
 function calculateAcquisitionCosts (statsReport) {
-  Object.keys(statsReport.month).forEach(x => calcStats(statsReport.month[x]))
-  Object.keys(statsReport.adGroup).forEach(x => calcStats(statsReport.adGroup[x]))
+  Object.keys(statsReport.month).forEach(x => {
+    calcStats(statsReport.month[x])
+    Object.keys(statsReport.month[x].byCampaign).forEach(y => calcStats(statsReport.month[x].byCampaign[y]))
+  })
+  Object.keys(statsReport.adGroup).forEach(x => {
+    calcStats(statsReport.adGroup[x])
+    Object.keys(statsReport.adGroup[x].byCampaign).forEach(y => calcStats(statsReport.adGroup[x].byCampaign[y]))
+  })
 }
 
 function getNumber (n) {
@@ -294,13 +361,16 @@ function createStatsEntry () {
     licensesPaidMarketingChurned: 0,
     averageLicenseCost: 0,
     licensesWithAmounts: 0,
-    byCampaign: { }
+    monthlyRecurringRevenue: 0
   }
 }
 
 function getEmailToCustomerMap (twRows, signupRows) {
   const emailToSignupInfoMap = signupRows.reduce((acc, x) => {
     acc[x['ga:eventLabel']] = {
+      adGroup: x['ga:adGroup'],
+      query: x['ga:adMatchedQuery'],
+      source: x['ga:sourceMedium'],
       country: x['ga:country'],
       campaign: x['ga:adwordsCampaignID'],
       campaignCountry: _campaigns[x['ga:adwordsCampaignID']] || '(not set)'
