@@ -143,7 +143,26 @@ function getMonthlyStatsSince (startMonth, numMonths, twRows) {
       endOfLastPeriod: start.clone().subtract(1, 'second').format('YYYY-MM-DD')
     }, stats))
   }
+
+  calculateMonthToMonthGrowth(monthlyStats)
+
   return monthlyStats
+}
+
+function calculateMonthToMonthGrowth (monthlyStats) {
+  let previous
+  monthlyStats.forEach((x, i) => {
+    x.monthlyRecurringRevenueGrowth = 0
+    x.licensesInPeriodGrowth = 0
+    x.customersInPeriodGrowth = 0
+
+    if (previous && i !== monthlyStats.length - 1) {
+      x.monthlyRecurringRevenueGrowth = (x.monthlyRecurringRevenue - previous.monthlyRecurringRevenue) / (previous.monthlyRecurringRevenue || 1) * 100
+      x.licensesInPeriodGrowth = (x.licensesInPeriod - previous.licensesInPeriod) / (previous.licensesInPeriod || 1) * 100
+      x.customersInPeriodGrowth = (x.customersInPeriod - previous.customersInPeriod) / (previous.customersInPeriod || 1) * 100
+    }
+    previous = x
+  })
 }
 
 function getLicensesAfter (startDate, twRows) {
@@ -154,8 +173,10 @@ function getLicensesAfter (startDate, twRows) {
 }
 
 function getStatsForPeriod (startDate, endDate, twRows) {
-  const activeCustomerRowsBeforePeriod = twRows
+  const activeCustomerRows = twRows
   .filter(isActiveCustomer)
+
+  const activeCustomerRowsBeforePeriod = activeCustomerRows
   .filter(x => Moment(x.subscriptionStartDate).isBefore(startDate))
 
   const licensesBeforePeriod = activeCustomerRowsBeforePeriod
@@ -169,6 +190,12 @@ function getStatsForPeriod (startDate, endDate, twRows) {
   .filter(x => startedInPeriod(x, startDate, endDate))
   .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
 
+  const customersInPeriod = twRows
+  .filter(x => startedInPeriod(x, startDate, endDate))
+  .length
+
+  const customersInPeriodAccumulated = customersInPeriod + activeCustomerRowsBeforePeriod.length
+
   const churnedRowsInPeriod = twRows
   .filter(x => isChurnedCustomerInPeriod(x, startDate, endDate))
 
@@ -181,12 +208,21 @@ function getStatsForPeriod (startDate, endDate, twRows) {
 
   const churnRate = licensesBeforePeriod ? (churnedLicensesInPeriod / licensesBeforePeriod) : 0
   const churnRateOptimistic = licensesFromRealCustomersBeforePeriod ? (churnedLicensesFromRealCustomersInPeriod / licensesFromRealCustomersBeforePeriod) : 0
+  const monthlyRecurringRevenue = activeCustomerRows
+  .filter(x => startedInPeriod(x, startDate, endDate))
+  .reduce((acc, x) => {
+    const amount = parseInt((x.amount || '0'), 10) / (x.billingCycle === 'annually' ? 12 : 1)
+    return acc + Math.round(amount)
+  }, 0)
+
+  const licensesInPeriodAccumulated = licensesInPeriod + licensesBeforePeriod
 
   console.log(`
   Churn rate in period ${startDate.format('YYYY-MM-DD')} - ${endDate.format('YYYY-MM-DD')}:
   =============================================
   Total:      ${churnedLicensesInPeriod} churned / ${licensesBeforePeriod} total licenses before period ~= ${churnRate}
   Optimistic: ${churnedLicensesFromRealCustomersInPeriod} churned / ${licensesFromRealCustomersBeforePeriod} total licenses before period ~= ${churnRateOptimistic}
+  MRR:        ${monthlyRecurringRevenue}
 
   Churned customers:
   `)
@@ -197,10 +233,14 @@ function getStatsForPeriod (startDate, endDate, twRows) {
   return {
     churnedLicensesInPeriod,
     churnedLicensesFromRealCustomersInPeriod,
+    customersInPeriod,
+    customersInPeriodAccumulated,
     licensesInPeriod,
+    licensesInPeriodAccumulated,
     licensesBeforePeriod,
     churnRate,
-    churnRateOptimistic
+    churnRateOptimistic,
+    monthlyRecurringRevenue
   }
 }
 

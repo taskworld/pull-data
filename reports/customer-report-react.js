@@ -45,14 +45,14 @@ class App extends React.Component {
 
   renderOverallStats (report) {
     return (
-      <div style={{ width: 800 }}>
-        <table className='table table-hover table-bordered'>
+      <div>
+        <table className='table table-hover table-bordered' style={{ width: 'auto' }}>
           <tbody>
             <tr>
-              <td>Licenses this Week:</td>
-              <td className='percentage'>{report.licensesThisWeek}</td>
-              <td>Average Cost per License:</td>
-              <td className='percentage'>$ {report.averageLicenseCost.toFixed(2)}</td>
+              <td style={{ width: 300 }}>Licenses this Week:</td>
+              <td style={{ width: 120 }} className='percentage'>{report.licensesThisWeek}</td>
+              <td style={{ width: 300 }}>Average Cost per License:</td>
+              <td style={{ width: 120 }} className='percentage'>$ {report.averageLicenseCost.toFixed(2)}</td>
             </tr>
             <tr>
               <td>Licenses in {moment().format('MMM YYYY')}:</td>
@@ -85,8 +85,8 @@ class App extends React.Component {
 
   renderMonthlyStats (report) {
     return (
-      <div style={{ width: 1000 }}>
-        <table className='table table-hover table-bordered'>
+      <div>
+        <table className='table table-hover table-bordered' style={{ width: 'auto' }}>
           <thead>
             <tr>
               <th>&nbsp;</th>
@@ -95,9 +95,9 @@ class App extends React.Component {
           </thead>
           <tbody>
             <tr>
-              <td>Churn Rate:</td>
+              <td style={{ width: 300 }}>Churn Rate:</td>
               {report.monthly.map((x, i) => (
-                <td className='percentage'>
+                <td className='percentage' style={{ width: 100 }}>
                   {(x.churnRate * 100).toFixed(2)}%
                 </td>
               ))}
@@ -132,6 +132,15 @@ class App extends React.Component {
               ))}
             </tr>
             <tr>
+              <td>New Customers In Period:</td>
+              {report.monthly.map((x, i) => (
+                <td className='percentage' key={i}>
+                  {x.customersInPeriod}
+                  <div className='details'>{x.customersInPeriodGrowth.toFixed(2)}%</div>
+                </td>
+              ))}
+            </tr>
+            <tr>
               <td>New Licenses Sold In Period:</td>
               {report.monthly.map((x, i) => (
                 <td className='percentage' key={i}>
@@ -140,10 +149,28 @@ class App extends React.Component {
               ))}
             </tr>
             <tr>
-              <td>Total Licenses Active Before Period:</td>
+              <td>Monthly Recurring Revenue:
+                <div className='details'>
+                  Valid from Oct 1st 2016.
+                </div>
+              </td>
+              {report.monthly.map((x, i) => {
+                if (x.start >= '2016-10-01') {
+                  return (
+                    <td className='percentage' key={i}>
+                      ${x.monthlyRecurringRevenue.toLocaleString()}
+                      <div className='details'>{x.monthlyRecurringRevenueGrowth.toFixed(2)}%</div>
+                    </td>
+                  )
+                }
+                return <td />
+              })}
+            </tr>
+            <tr>
+              <td>Total Licenses In Period:</td>
               {report.monthly.map((x, i) => (
                 <td className='percentage' key={i}>
-                  {x.licensesBeforePeriod}
+                  {x.licensesInPeriodAccumulated}
                 </td>
               ))}
             </tr>
@@ -197,19 +224,12 @@ App.propTypes = {
 }
 
 const ReportRow = ({ row, remaining, opts }) => {
-  let isBeforeToday = moment(row.subscriptionStartDate).isBefore(
-    moment().startOf('day')
-  )
   const isWithinToday = moment(row.subscriptionStartDate).isAfter(
     moment().startOf('day')
   )
   const isWithin48Hours = moment(row.subscriptionStartDate).isAfter(
     moment().subtract(2, 'days').startOf('day')
   )
-
-  if (row.secondaryDate) {
-    isBeforeToday = row.secondaryDate.isBefore(moment().startOf('day'))
-  }
 
   const newCls = classNames({
     'nowrap': true,
