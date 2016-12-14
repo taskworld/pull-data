@@ -75,7 +75,10 @@ function renderTaskworldReport (twCsvFile, adwordsCsvFile) {
     if (process.argv[2] === 'upload') {
       S3.uploadToS3(S3.createItem(reportFile))
       .then(res => {
+        const expiresMatch = /Expires=(\d+)/.exec(res.signedUrl)
+        const expiresDate = new Date(parseInt(expiresMatch[1], 10) * 1000)
         console.log('res=', res)
+        console.log(`=======================================\nExpires:`, expiresDate)
       })
     }
   })
