@@ -220,6 +220,13 @@ function getStatsForPeriod (startDate, endDate, twRows) {
 
   const licensesInPeriodAccumulated = licensesInPeriod + licensesBeforePeriod
 
+  const monthlyRevenuesTotalInPeriod = twRows
+  .filter(x => startedInPeriod(x, startDate, endDate))
+  .reduce((acc, x) => {
+    const amount = parseInt((x.amount || '0'), 10)
+    return acc + Math.round(amount)
+  }, 0)
+
   console.log(`
   Churn rate in period ${startDate.format('YYYY-MM-DD')} - ${endDate.format('YYYY-MM-DD')}:
   =============================================
@@ -243,7 +250,8 @@ function getStatsForPeriod (startDate, endDate, twRows) {
     licensesBeforePeriod,
     churnRate,
     churnRateOptimistic,
-    monthlyRecurringRevenue
+    monthlyRecurringRevenue,
+    monthlyRevenuesTotalInPeriod
   }
 }
 

@@ -167,6 +167,19 @@ class App extends React.Component {
               })}
             </tr>
             <tr>
+              <td>Monthly Revenue (Total Sales):</td>
+              {report.monthly.map((x, i) => {
+                if (x.start >= '2016-10-01') {
+                  return (
+                    <td className='percentage' key={i}>
+                      ${x.monthlyRevenuesTotalInPeriod.toLocaleString()}
+                    </td>
+                  )
+                }
+                return <td />
+              })}
+            </tr>
+            <tr>
               <td>Total Licenses In Period:</td>
               {report.monthly.map((x, i) => (
                 <td className='percentage' key={i}>
@@ -199,14 +212,14 @@ class App extends React.Component {
           {this.renderOverallStats(data.report)}
           {this.renderMonthlyStats(data.report)}
 
-          <br/>
+          <br />
 
           {this.renderTable(
             'Active Customers',
             data.rows.filter(x => x.isActive)
           )}
 
-          <br/>
+          <br />
 
           {this.renderTable(
             'Churned Customers',
@@ -257,7 +270,10 @@ const ReportRow = ({ row, remaining, opts }) => {
         <div className='details'>{moment(row.subscriptionEndDate).format('YYYY-MM-DD')}</div>
       </td>
       <td>{row.paymentType}</td>
-      <td className={newCls}>{row.licenses}</td>
+      <td className={newCls}>
+        <div>{row.licenses}</div>
+        <div className='details'>${(Number(row.amount || 0)).toLocaleString()}</div>
+      </td>
       <td className={newCls}>{row.billingCycle}</td>
       <td>{row.subscriptionId ? 'BrainTree' : 'Invoice'}</td>
       <td>{row.signupSource}</td>

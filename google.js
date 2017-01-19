@@ -137,7 +137,7 @@ function Usage (error) {
 function parseOpts (opts) {
   let id = opts['id'] || Usage('--id is required')
   let from = opts['from'] || Usage('--from is required')
-  let to = opts['to'] || Moment().format('YYYY-MM-DD')
+  let to = opts['to'] || Moment().add(2, 'days').format('YYYY-MM-DD')
   let dimensions = opts['dimensions'] || Usage('--dimensions is required')
   let metrics = opts['metrics'] || Usage('--metrics is required')
   let sortby = opts['sortby'] ? opts['sortby'] : false
