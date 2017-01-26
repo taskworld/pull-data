@@ -60,8 +60,12 @@ function renderTaskworldReport (twCsvFile, adwordsCsvFile) {
       },
       rows: twRows
     }
+
     // Add average churn rates
     getAverageChurnRates(report)
+
+    // Add average lifetime value
+    getAverageLifetimeValue(report)
 
     console.log(JSON.stringify(report.report, null, 2))
 
@@ -99,6 +103,27 @@ function getAverageLicenseCost (twRows) {
     licensesWithAmounts: 0
   })
   return s.averageLicenseCost / (s.licensesWithAmounts || 1)
+}
+
+function getAverageLifetimeValue (report) {
+  const s = report.report.monthly.reduce((acc, x) => {
+    acc.lifetimeValueMonthlyAverage += x.lifetimeValue
+    acc.lifetimeValueOptimisticMonthlyAverage += x.lifetimeValueOptimistic
+    if (x.lifetimeValue) {
+      acc.lifetimeValueMonths++
+    }
+    if (x.lifetimeValueOptimistic) {
+      acc.lifetimeValueOptimisticMonths++
+    }
+    return acc
+  }, Object.assign(report.report, {
+    lifetimeValueMonthlyAverage: 0,
+    lifetimeValueOptimisticMonthlyAverage: 0,
+    lifetimeValueMonths: 0,
+    lifetimeValueOptimisticMonths: 0
+  }))
+  s.lifetimeValueMonthlyAverage /= (s.lifetimeValueMonths || 1)
+  s.lifetimeValueOptimisticMonthlyAverage /= (s.lifetimeValueOptimisticMonths || 1)
 }
 
 function getAverageChurnRates (report) {
@@ -227,12 +252,23 @@ function getStatsForPeriod (startDate, endDate, twRows) {
     return acc + Math.round(amount)
   }, 0)
 
+  let lifetimeValue = 0
+  let lifetimeValueOptimistic = 0
+  if (churnRate > 0.005 && licensesInPeriod) {
+    lifetimeValue = monthlyRecurringRevenue / licensesInPeriod / churnRate
+    lifetimeValueOptimistic = monthlyRecurringRevenue / licensesInPeriod / churnRateOptimistic
+  }
+
+  const licensePriceInPeriod = licensesInPeriod ? (monthlyRecurringRevenue / licensesInPeriod) : 0
+
   console.log(`
   Churn rate in period ${startDate.format('YYYY-MM-DD')} - ${endDate.format('YYYY-MM-DD')}:
   =============================================
-  Total:      ${churnedLicensesInPeriod} churned / ${licensesBeforePeriod} total licenses before period ~= ${churnRate}
-  Optimistic: ${churnedLicensesFromRealCustomersInPeriod} churned / ${licensesFromRealCustomersBeforePeriod} total licenses before period ~= ${churnRateOptimistic}
-  MRR:        ${monthlyRecurringRevenue}
+  Total:            ${churnedLicensesInPeriod} churned / ${licensesBeforePeriod} total licenses before period ~= ${churnRate}
+  Optimistic:       ${churnedLicensesFromRealCustomersInPeriod} churned / ${licensesFromRealCustomersBeforePeriod} total licenses before period ~= ${churnRateOptimistic}
+  MRR:              ${monthlyRecurringRevenue}
+  LTV:              ${lifetimeValue}
+  LTV (Optimistic): ${lifetimeValueOptimistic}
 
   Churned customers:
   `)
@@ -251,7 +287,10 @@ function getStatsForPeriod (startDate, endDate, twRows) {
     churnRate,
     churnRateOptimistic,
     monthlyRecurringRevenue,
-    monthlyRevenuesTotalInPeriod
+    monthlyRevenuesTotalInPeriod,
+    lifetimeValue,
+    lifetimeValueOptimistic,
+    licensePriceInPeriod
   }
 }
 

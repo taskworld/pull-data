@@ -149,6 +149,26 @@ class App extends React.Component {
               ))}
             </tr>
             <tr>
+              <td>License Price In Period:</td>
+              {report.monthly.map((x, i) => {
+                return (
+                  <td className='percentage' key={i}>
+                    ${x.licensePriceInPeriod.toFixed(1)}
+                  </td>
+                )
+              })}
+            </tr>
+            <tr>
+              <td>Lifetime Value of a License:</td>
+              {report.monthly.map((x, i) => {
+                return (
+                  <td className='percentage' key={i}>
+                    ${x.lifetimeValue.toFixed(0)}
+                  </td>
+                )
+              })}
+            </tr>
+            <tr>
               <td>Monthly Recurring Revenue:
                 <div className='details'>
                   Valid from Oct 1st 2016.
@@ -167,7 +187,7 @@ class App extends React.Component {
               })}
             </tr>
             <tr>
-              <td>Monthly Revenue (Total Sales):</td>
+              <td>Total Sales Revenues in Period:</td>
               {report.monthly.map((x, i) => {
                 if (x.start >= '2016-10-01') {
                   return (
