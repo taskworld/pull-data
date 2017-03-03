@@ -33,7 +33,28 @@ const _campaigns = {
   '695256601': 'SE,DK,NO,FI',
   '619677960': 'SG',
   '657886988': 'US,GB,AU,NZ,SA,IE',
-  '693547326': 'BR'
+  '693547326': 'BR',
+  '736970062': 'KR',
+  '738750462': 'JP',
+  '742550076': 'MY',
+  '745188684': 'IT',
+  '746102772': 'PH',
+  '756974129': 'US (M)',
+  '757018079': 'DE (M)',
+  '757035578': 'TH (M)',
+  '757037015': 'AU,NZ (M)',
+  '757038419': 'NORDIC (M)',
+  '757041068': 'FR (M)',
+  '757042301': 'IT (M)',
+  '757085705': 'US DL ANDROID',
+  '757105902': 'KR (M)',
+  '757105905': 'CA (M)',
+  '757108941': 'UK (M)',
+  '757114026': 'SA (M)',
+  '742563489': 'TH ENG',
+  '733924522': 'ID ENG',
+  '713120356': 'LATIN',
+  '353479854': 'CA DISPLAY'
 }
 
 function renderAdStatsReport () {
@@ -208,7 +229,9 @@ function calculateCustomerStats (statsReport) {
     const adGroup = statsReport.adGroup[adGroupName]
     adGroup.customers.forEach(customer => {
       let month
-      const licenses = parseInt(customer.licenses, 10)
+      let licenses = parseInt(customer.licenses, 10)
+      if (licenses > 1000) licenses = 50
+
       const isActive = isActiveCustomer(customer)
       const campaignLabel = getCampaignLabel(customer.campaign)
 

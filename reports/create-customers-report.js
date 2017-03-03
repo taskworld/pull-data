@@ -25,6 +25,10 @@ function renderTaskworldReport (twCsvFile, adwordsCsvFile) {
     }, { })
 
     twRows.forEach((x) => {
+      // Convert licenses to int.
+      x.licenses = parseInt(x.licenses, 10)
+      if (x.licenses > 1000) x.licenses = 50
+
       x.signupSource = ''
       x.channel = ''
       x.country = ''
@@ -92,7 +96,7 @@ function getAverageLicenseCost (twRows) {
   const s = twRows.reduce((acc, x) => {
     if (x.amount && x.licenses) {
       const amount = parseFloat(x.amount)
-      const licenses = parseInt(x.licenses, 10)
+      const licenses = x.licenses
       const subscriptionCost = amount / (x.billingCycle === 'annually' ? 12 : 1)
       acc.averageLicenseCost += (subscriptionCost / (licenses || 1))
       acc.licensesWithAmounts++
@@ -106,14 +110,18 @@ function getAverageLicenseCost (twRows) {
 }
 
 function getAverageLifetimeValue (report) {
+  const currentMonth = Moment().month()
   const s = report.report.monthly.reduce((acc, x) => {
-    acc.lifetimeValueMonthlyAverage += x.lifetimeValue
-    acc.lifetimeValueOptimisticMonthlyAverage += x.lifetimeValueOptimistic
-    if (x.lifetimeValue) {
-      acc.lifetimeValueMonths++
-    }
-    if (x.lifetimeValueOptimistic) {
-      acc.lifetimeValueOptimisticMonths++
+    const isCurrentMonth = Moment(x.start, 'YYYY-MM-DD').month() === currentMonth
+    if (!isCurrentMonth) {
+      acc.lifetimeValueMonthlyAverage += x.lifetimeValue
+      acc.lifetimeValueOptimisticMonthlyAverage += x.lifetimeValueOptimistic
+      if (x.lifetimeValue) {
+        acc.lifetimeValueMonths++
+      }
+      if (x.lifetimeValueOptimistic) {
+        acc.lifetimeValueOptimisticMonths++
+      }
     }
     return acc
   }, Object.assign(report.report, {
@@ -127,14 +135,18 @@ function getAverageLifetimeValue (report) {
 }
 
 function getAverageChurnRates (report) {
+  const currentMonth = Moment().month()
   const s = report.report.monthly.reduce((acc, x) => {
-    acc.churnRateMonthlyAverage += x.churnRate
-    acc.churnRateOptimisticMonthlyAverage += x.churnRateOptimistic
-    if (x.churnRate) {
-      acc.churnRateMonths++
-    }
-    if (x.churnRateOptimistic) {
-      acc.churnRateOptimisticMonths++
+    const isCurrentMonth = Moment(x.start, 'YYYY-MM-DD').month() === currentMonth
+    if (!isCurrentMonth) {
+      acc.churnRateMonthlyAverage += x.churnRate
+      acc.churnRateOptimisticMonthlyAverage += x.churnRateOptimistic
+      if (x.churnRate) {
+        acc.churnRateMonths++
+      }
+      if (x.churnRateOptimistic) {
+        acc.churnRateOptimisticMonths++
+      }
     }
     return acc
   }, Object.assign(report.report, {
@@ -150,7 +162,7 @@ function getAverageChurnRates (report) {
 function getTotalLicenses (twRows) {
   return twRows
   .filter(isActiveCustomer)
-  .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
+  .reduce((acc, x) => acc + x.licenses, 0)
 }
 
 function getMonthlyStatsSince (startMonth, numMonths, twRows) {
@@ -197,7 +209,7 @@ function getLicensesAfter (startDate, twRows) {
   return twRows
   .filter(isActiveCustomer)
   .filter(x => Moment(x.subscriptionStartDate).isAfter(startDate))
-  .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
+  .reduce((acc, x) => acc + x.licenses, 0)
 }
 
 function getStatsForPeriod (startDate, endDate, twRows) {
@@ -208,15 +220,15 @@ function getStatsForPeriod (startDate, endDate, twRows) {
   .filter(x => Moment(x.subscriptionStartDate).isBefore(startDate))
 
   const licensesBeforePeriod = activeCustomerRowsBeforePeriod
-  .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
+  .reduce((acc, x) => acc + x.licenses, 0)
 
   const licensesFromRealCustomersBeforePeriod = activeCustomerRowsBeforePeriod
   .filter(isRealCustomer)
-  .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
+  .reduce((acc, x) => acc + x.licenses, 0)
 
   const licensesInPeriod = twRows
   .filter(x => startedInPeriod(x, startDate, endDate))
-  .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
+  .reduce((acc, x) => acc + x.licenses, 0)
 
   const customersInPeriod = twRows
   .filter(x => startedInPeriod(x, startDate, endDate))
@@ -228,11 +240,11 @@ function getStatsForPeriod (startDate, endDate, twRows) {
   .filter(x => isChurnedCustomerInPeriod(x, startDate, endDate))
 
   const churnedLicensesInPeriod = churnedRowsInPeriod
-  .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
+  .reduce((acc, x) => acc + x.licenses, 0)
 
   const churnedLicensesFromRealCustomersInPeriod = churnedRowsInPeriod
   .filter(isRealCustomer)
-  .reduce((acc, x) => acc + parseInt(x.licenses, 10), 0)
+  .reduce((acc, x) => acc + x.licenses, 0)
 
   const churnRate = licensesBeforePeriod ? (churnedLicensesInPeriod / licensesBeforePeriod) : 0
   const churnRateOptimistic = licensesFromRealCustomersBeforePeriod ? (churnedLicensesFromRealCustomersInPeriod / licensesFromRealCustomersBeforePeriod) : 0

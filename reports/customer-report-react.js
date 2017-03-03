@@ -51,7 +51,7 @@ class App extends React.Component {
             <tr>
               <td style={{ width: 300 }}>Licenses this Week:</td>
               <td style={{ width: 120 }} className='percentage'>{report.licensesThisWeek}</td>
-              <td style={{ width: 300 }}>Average Cost per License:</td>
+              <td style={{ width: 300 }}>Average Revenue per License:</td>
               <td style={{ width: 120 }} className='percentage'>$ {report.averageLicenseCost.toFixed(2)}</td>
             </tr>
             <tr>
@@ -159,7 +159,7 @@ class App extends React.Component {
               })}
             </tr>
             <tr>
-              <td>Lifetime Value of a License:</td>
+              <td>Lifetime Value of a 0.05License:</td>
               {report.monthly.map((x, i) => {
                 return (
                   <td className='percentage' key={i}>
@@ -169,7 +169,7 @@ class App extends React.Component {
               })}
             </tr>
             <tr>
-              <td>Monthly Recurring Revenue:
+              <td>New Monthly Recurring Revenue:
                 <div className='details'>
                   Valid from Oct 1st 2016.
                 </div>
