@@ -54,6 +54,44 @@ function isBlacklistedEmailAddress (email) {
   return _blacklistedEmailsRegexp.test(email)
 }
 
+function * getTransactionHistory (db, opts) {
+  const $match = {
+    action: 'subscription_charged_successfully',
+    workspace_id: { $exists: true }
+  }
+  const $project = { workspace_id: 1, created: 1, _id: 1, transaction_amount: 1 }
+
+  const $sort1 = { created: 1 }
+  const $sort2 = { created: -1 }
+
+  const $group = {
+    _id: '$workspace_id',
+    created: { $max: '$created' },
+    transactions: {
+      $push: {
+        amount: '$transaction_amount',
+        date: '$created'
+      }
+    }
+  }
+
+  const res = yield db.collection('transaction_logs')
+  .aggregate([
+    { $match },
+    { $project },
+    { $sort: $sort1 },
+    { $group },
+    { $sort: $sort2 }
+  ]).toArray()
+
+  const history = res.reduce((acc, x) => {
+    acc[x._id.toString()] = x
+    return acc
+  }, { })
+
+  return history
+}
+
 function * exportTransactionLog (db, opts) {
   const dateRange =
     opts.startDate.format('YYYY-MM-DD') + '-' +
@@ -131,6 +169,8 @@ function * exportMemberships (db, opts) {
   .toArray()
   console.log(`Found ${memberships.length} memberships.`)
 
+  const txnHistory = yield * getTransactionHistory(db, opts)
+
   const membershipIds = memberships.map((x) => x._id.toString())
 
   const membershipMap = memberships.reduce((acc, x) => {
@@ -186,8 +226,20 @@ function * exportMemberships (db, opts) {
         return false
       }
 
+      const workspaceId = x._id.toString()
+      const history = txnHistory[workspaceId]
+      let latestAmount = m.price
+      let previousAmount = 0
+      if (history && history.transactions && history.transactions.length) {
+        const l = history.transactions.length
+        latestAmount = history.transactions[l - 1].amount
+        if (l > 1) {
+          previousAmount = history.transactions[l - 2].amount
+        }
+      }
+
       return {
-        workspaceId: x._id.toString(),
+        workspaceId: workspaceId,
         workspaceName: x.name,
         workspaceDisplayName: x.display_name,
         workspaceCreatedDate: Moment(x.created).format(),
@@ -201,7 +253,9 @@ function * exportMemberships (db, opts) {
         subscriptionEndDate: Moment(m.expiry_date).format(),
         licenses: m.user_limit,
         billingCycle: m.billing_cycle_type,
-        amount: m.price
+        amount: latestAmount,
+        currentPrice: m.price,
+        previousAmount
       }
     }
     return false

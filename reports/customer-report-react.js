@@ -15,8 +15,7 @@ class App extends React.Component {
               <th>#</th>
               <th>Workspace Name</th>
               <th>Created</th>
-              <th>Owner Name</th>
-              <th>Owner Email</th>
+              <th>Owner</th>
               <th>Subscription</th>
               <th>{opts.dateTitle ? opts.dateTitle : 'Start Date'}</th>
               <th>Payment Type</th>
@@ -276,8 +275,10 @@ const ReportRow = ({ row, remaining, opts }) => {
       <td>{remaining}</td>
       <td>{row.workspaceDisplayName}</td>
       <td className='nowrap'>{moment(row.workspaceCreatedDate).format('YYYY-MM-DD')}</td>
-      <td>{row.ownerName}</td>
-      <td>{row.ownerEmail}</td>
+      <td>
+        <div>{row.ownerName}</div>
+        <div className='details-big'>{row.ownerEmail}</div>
+      </td>
       <td>
         <div>{row.subscription}</div>
         <div className='details'>{row.membershipDays} days</div>
