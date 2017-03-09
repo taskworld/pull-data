@@ -24,6 +24,7 @@
     "mimer": "^0.2.1",
     "minimist": "^1.2.0",
     "moment": "^2.14.1",
+    "moment-timezone": "^0.5.11",
     "mongodb": "^2.2.9",
     "paypal-rest-sdk": "^1.6.9",
     "sendgrid": "^4.5.0",
