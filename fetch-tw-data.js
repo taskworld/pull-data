@@ -169,10 +169,7 @@ function * exportMemberships (db, opts) {
   .toArray()
   console.log(`Found ${memberships.length} memberships.`)
 
-  const txnHistory = yield * getTransactionHistory(db, opts)
-
   const membershipIds = memberships.map((x) => x._id.toString())
-
   const membershipMap = memberships.reduce((acc, x) => {
     acc[x._id.toString()] = x
     return acc
@@ -227,16 +224,6 @@ function * exportMemberships (db, opts) {
       }
 
       const workspaceId = x._id.toString()
-      const history = txnHistory[workspaceId]
-      let latestAmount = m.price
-      let previousAmount = 0
-      if (history && history.transactions && history.transactions.length) {
-        const l = history.transactions.length
-        latestAmount = history.transactions[l - 1].amount
-        if (l > 1) {
-          previousAmount = history.transactions[l - 2].amount
-        }
-      }
 
       return {
         workspaceId: workspaceId,
@@ -253,9 +240,10 @@ function * exportMemberships (db, opts) {
         subscriptionEndDate: Moment(m.expiry_date).format(),
         licenses: m.user_limit,
         billingCycle: m.billing_cycle_type,
-        amount: latestAmount,
-        currentPrice: m.price,
-        previousAmount
+        amount: m.cycle_charges.normal,
+        upgraded: m.cycle_charges.upgraded,
+        refunded: m.cycle_charges.refunded,
+        currentPrice: m.price
       }
     }
     return false
