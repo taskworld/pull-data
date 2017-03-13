@@ -7,7 +7,7 @@ const Util = require('./util')
 const Fs = require('fs')
 P.promisifyAll(Fs)
 
-const MAX_DOCS = 10000
+const MAX_DOCS = 50000
 
 const tzToCountry = require('moment-timezone/data/meta/latest.json')
 
