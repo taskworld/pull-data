@@ -2,6 +2,7 @@
 
 const P = require('bluebird')
 const Assert = require('assert')
+const Mongo = require('mongodb')
 const MongoClient = require('mongodb').MongoClient
 const ObjectID = require('mongodb').ObjectID
 
@@ -19,7 +20,9 @@ function connect (_url) {
   // mongodb://[username:password@]host1[:port1][/[database]
   const url = _url || process.env.PULLDATA_MONGO_DB_URL
   console.log('Connecting to', url)
-  return MongoClient.connect(url)
+  return MongoClient.connect(url, {
+    readPreference: Mongo.ReadPreference.SECONDARY_PREFERRED
+  })
   .then(db => {
     _db = db
     console.log('Connected to MongoDB:', _db.s.databaseName)

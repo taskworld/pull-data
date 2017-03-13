@@ -25,6 +25,7 @@ class App extends React.Component {
               <th>Signup Source</th>
               <th>Channel</th>
               <th>Country</th>
+              <th>Workspace ID</th>
             </tr>
           </thead>
           <tbody>
@@ -158,7 +159,7 @@ class App extends React.Component {
               })}
             </tr>
             <tr>
-              <td>Lifetime Value of a 0.05License:</td>
+              <td>Lifetime Value of a License:</td>
               {report.monthly.map((x, i) => {
                 return (
                   <td className='percentage' key={i}>
@@ -300,6 +301,7 @@ const ReportRow = ({ row, remaining, opts }) => {
       <td>{row.signupSource}</td>
       <td>{row.channel}</td>
       <td>{row.country}</td>
+      <td><div className='details'>{row.workspaceId}</div></td>
     </tr>
   )
 }

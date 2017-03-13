@@ -28,6 +28,7 @@ function renderTaskworldReport (twCsvFile, adwordsCsvFile) {
       // Convert licenses to int.
       x.licenses = parseInt(x.licenses, 10)
       if (x.licenses > 1000) x.licenses = 50
+      x.amount = parseFloat(x.amount) || 0.0
 
       x.signupSource = ''
       x.channel = ''
@@ -95,10 +96,12 @@ function renderTaskworldReport (twCsvFile, adwordsCsvFile) {
 function getAverageLicenseCost (twRows) {
   const s = twRows.reduce((acc, x) => {
     if (x.amount && x.licenses) {
-      const amount = parseFloat(x.amount)
       const licenses = x.licenses
-      const subscriptionCost = amount / (x.billingCycle === 'annually' ? 12 : 1)
-      acc.averageLicenseCost += (subscriptionCost / (licenses || 1))
+      const subscriptionCost = getSubscriptionMontlyValue(x)
+      const pricePerLicense = subscriptionCost / (licenses || 1)
+      // console.log('pricePerLicense=', pricePerLicense, 'cost=', subscriptionCost, 'licenses=', licenses, 'amount=', x.amount, 'billingCycle=', x.billingCycle)
+
+      acc.averageLicenseCost += pricePerLicense
       acc.licensesWithAmounts++
     }
     return acc
@@ -212,6 +215,10 @@ function getLicensesAfter (startDate, twRows) {
   .reduce((acc, x) => acc + x.licenses, 0)
 }
 
+function getSubscriptionMontlyValue (x) {
+  return x.amount / (x.billingCycle === 'annually' ? 12 : 1)
+}
+
 function getStatsForPeriod (startDate, endDate, twRows) {
   const activeCustomerRows = twRows
   .filter(isActiveCustomer)
@@ -250,19 +257,13 @@ function getStatsForPeriod (startDate, endDate, twRows) {
   const churnRateOptimistic = licensesFromRealCustomersBeforePeriod ? (churnedLicensesFromRealCustomersInPeriod / licensesFromRealCustomersBeforePeriod) : 0
   const monthlyRecurringRevenue = activeCustomerRows
   .filter(x => startedInPeriod(x, startDate, endDate))
-  .reduce((acc, x) => {
-    const amount = parseInt((x.amount || '0'), 10) / (x.billingCycle === 'annually' ? 12 : 1)
-    return acc + Math.round(amount)
-  }, 0)
+  .reduce((acc, x) => acc + Math.round(getSubscriptionMontlyValue(x)), 0)
 
   const licensesInPeriodAccumulated = licensesInPeriod + licensesBeforePeriod
 
   const monthlyRevenuesTotalInPeriod = twRows
   .filter(x => startedInPeriod(x, startDate, endDate))
-  .reduce((acc, x) => {
-    const amount = parseInt((x.amount || '0'), 10)
-    return acc + Math.round(amount)
-  }, 0)
+  .reduce((acc, x) => acc + Math.round(getSubscriptionMontlyValue(x)), 0)
 
   let lifetimeValue = 0
   let lifetimeValueOptimistic = 0
