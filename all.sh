@@ -6,6 +6,9 @@ node fetch-tw-data.js --from 2016-06-01 --to 2018-06-01
 echo "Fetching GA signups data .."
 ./get-adword-signups.sh 2016-06-01
 
+echo "Fetching GA signups by device data .."
+./get-adword-signups-device.sh 2016-06-01
+
 echo "Fetching GA + AdWord stats .."
 ./get-adword-stats.sh 2016-06-01
 

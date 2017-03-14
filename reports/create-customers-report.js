@@ -11,15 +11,25 @@ const Util = require('../util')
 const REAL_CUSTOMER_AFTER_SUBSCRIBED_DAYS = 45
 const MAX_MONTHS = 6
 
-renderTaskworldReport('/tmp/tw-data.csv', '/tmp/adword-signups.csv')
+renderTaskworldReport(
+  '/tmp/tw-data.csv',
+  '/tmp/adword-signups.csv',
+  '/tmp/adword-signups-device.csv'
+)
 
-function renderTaskworldReport (twCsvFile, adwordsCsvFile) {
+function renderTaskworldReport (twCsvFile, adwordsCsvFile, deviceCsvFile) {
   return P.all([
     Util.readCsv(twCsvFile),
-    Util.readCsv(adwordsCsvFile)
+    Util.readCsv(adwordsCsvFile),
+    Util.readCsv(deviceCsvFile)
   ])
-  .spread((twRows, adwordsRows) => {
+  .spread((twRows, adwordsRows, deviceRows) => {
     const adMap = adwordsRows.reduce((acc, x) => {
+      acc[x['ga:eventLabel']] = x
+      return acc
+    }, { })
+
+    const deviceMap = deviceRows.reduce((acc, x) => {
       acc[x['ga:eventLabel']] = x
       return acc
     }, { })
@@ -33,6 +43,8 @@ function renderTaskworldReport (twCsvFile, adwordsCsvFile) {
       x.signupSource = ''
       x.channel = ''
       x.country = ''
+      x.device = ''
+
       const source = adMap[x.ownerEmail]
       if (source) {
         if (source['ga:adGroup'] !== '(not set)') {
@@ -41,6 +53,12 @@ function renderTaskworldReport (twCsvFile, adwordsCsvFile) {
         x.channel = source['ga:sourceMedium']
         x.country = source['ga:country']
       }
+
+      const device = deviceMap[x.ownerEmail]
+      if (device) {
+        x.device = device['ga:deviceCategory']
+      }
+
       x.membershipDays = Math.min(
         Moment(x.subscriptionEndDate).diff(Moment(x.subscriptionStartDate), 'days'),
         Moment().diff(Moment(x.subscriptionStartDate), 'days')
@@ -72,7 +90,8 @@ function renderTaskworldReport (twCsvFile, adwordsCsvFile) {
     // Add average lifetime value
     getAverageLifetimeValue(report)
 
-    console.log(JSON.stringify(report.report, null, 2))
+    // DUMP !
+    // console.log(JSON.stringify(report.rows, null, 2))
 
     html = html
     .replace('{{DATA}}', JSON.stringify(report, null, 2))
@@ -263,7 +282,7 @@ function getStatsForPeriod (startDate, endDate, twRows) {
 
   const monthlyRevenuesTotalInPeriod = twRows
   .filter(x => startedInPeriod(x, startDate, endDate))
-  .reduce((acc, x) => acc + Math.round(getSubscriptionMontlyValue(x)), 0)
+  .reduce((acc, x) => acc + Math.round(parseFloat(x.amount) || 0), 0)
 
   let lifetimeValue = 0
   let lifetimeValueOptimistic = 0
@@ -274,20 +293,23 @@ function getStatsForPeriod (startDate, endDate, twRows) {
 
   const licensePriceInPeriod = licensesInPeriod ? (monthlyRecurringRevenue / licensesInPeriod) : 0
 
-  console.log(`
-  Churn rate in period ${startDate.format('YYYY-MM-DD')} - ${endDate.format('YYYY-MM-DD')}:
-  =============================================
-  Total:            ${churnedLicensesInPeriod} churned / ${licensesBeforePeriod} total licenses before period ~= ${churnRate}
-  Optimistic:       ${churnedLicensesFromRealCustomersInPeriod} churned / ${licensesFromRealCustomersBeforePeriod} total licenses before period ~= ${churnRateOptimistic}
-  MRR:              ${monthlyRecurringRevenue}
-  LTV:              ${lifetimeValue}
-  LTV (Optimistic): ${lifetimeValueOptimistic}
+  const debug = false
+  if (debug) {
+    console.log(`
+    Churn rate in period ${startDate.format('YYYY-MM-DD')} - ${endDate.format('YYYY-MM-DD')}:
+    =============================================
+    Total:            ${churnedLicensesInPeriod} churned / ${licensesBeforePeriod} total licenses before period ~= ${churnRate}
+    Optimistic:       ${churnedLicensesFromRealCustomersInPeriod} churned / ${licensesFromRealCustomersBeforePeriod} total licenses before period ~= ${churnRateOptimistic}
+    MRR:              ${monthlyRecurringRevenue}
+    LTV:              ${lifetimeValue}
+    LTV (Optimistic): ${lifetimeValueOptimistic}
 
-  Churned customers:
-  `)
-  churnedRowsInPeriod.forEach(x => {
-    console.log(`  [${Moment(x.subscriptionEndDate).format('YYYY-MM-DD')}] - ${x.licenses} - ${x.workspaceDisplayName} / ${x.ownerName}`)
-  })
+    Churned customers:
+    `)
+    churnedRowsInPeriod.forEach(x => {
+      console.log(`  [${Moment(x.subscriptionEndDate).format('YYYY-MM-DD')}] - ${x.licenses} - ${x.workspaceDisplayName} / ${x.ownerName}`)
+    })
+  }
 
   return {
     churnedLicensesInPeriod,

@@ -299,7 +299,10 @@ const ReportRow = ({ row, remaining, opts }) => {
       <td className={newCls}>{row.billingCycle}</td>
       <td>{row.subscriptionId ? 'BrainTree' : 'Invoice'}</td>
       <td>{row.signupSource}</td>
-      <td>{row.channel}</td>
+      <td>
+        <div>{row.channel}</div>
+        <div className='details'>{row.device}</div>
+      </td>
       <td>{row.country}</td>
       <td><div className='details'>{row.workspaceId}</div></td>
     </tr>
