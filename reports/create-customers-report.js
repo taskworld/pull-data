@@ -252,12 +252,12 @@ function getStatsForPeriod (startDate, endDate, twRows) {
   .filter(isRealCustomer)
   .reduce((acc, x) => acc + x.licenses, 0)
 
-  const licensesInPeriod = twRows
-  .filter(x => startedInPeriod(x, startDate, endDate))
+  const rowsInPeriod = twRows.filter(x => startedInPeriod(x, startDate, endDate))
+
+  const licensesInPeriod = rowsInPeriod
   .reduce((acc, x) => acc + x.licenses, 0)
 
-  const customersInPeriod = twRows
-  .filter(x => startedInPeriod(x, startDate, endDate))
+  const customersInPeriod = rowsInPeriod
   .length
 
   const customersInPeriodAccumulated = customersInPeriod + activeCustomerRowsBeforePeriod.length
@@ -280,9 +280,17 @@ function getStatsForPeriod (startDate, endDate, twRows) {
 
   const licensesInPeriodAccumulated = licensesInPeriod + licensesBeforePeriod
 
-  const monthlyRevenuesTotalInPeriod = twRows
-  .filter(x => startedInPeriod(x, startDate, endDate))
-  .reduce((acc, x) => acc + Math.round(parseFloat(x.amount) || 0), 0)
+  let salesMonthlyTotal = 0
+  let salesAnnualTotal = 0
+  const monthlyRevenuesTotalInPeriod = rowsInPeriod
+  .reduce((acc, x) => {
+    const amount = Math.round(parseFloat(x.amount) || 0)
+    if (x.billingCycle === 'annually') salesAnnualTotal += amount
+    if (x.billingCycle === 'monthly') salesMonthlyTotal += amount
+    return acc + amount
+  }, 0)
+  const salesMonthlyPercentage = Math.round(salesMonthlyTotal / monthlyRevenuesTotalInPeriod * 100)
+  const salesAnnualPercentage = Math.round(salesAnnualTotal / monthlyRevenuesTotalInPeriod * 100)
 
   let lifetimeValue = 0
   let lifetimeValueOptimistic = 0
@@ -325,7 +333,11 @@ function getStatsForPeriod (startDate, endDate, twRows) {
     monthlyRevenuesTotalInPeriod,
     lifetimeValue,
     lifetimeValueOptimistic,
-    licensePriceInPeriod
+    licensePriceInPeriod,
+    salesMonthlyTotal,
+    salesAnnualTotal,
+    salesMonthlyPercentage,
+    salesAnnualPercentage
   }
 }
 

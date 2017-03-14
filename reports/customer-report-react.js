@@ -193,6 +193,8 @@ class App extends React.Component {
                   return (
                     <td className='percentage' key={i}>
                       ${x.monthlyRevenuesTotalInPeriod.toLocaleString()}
+                      <div className='details'>M: ${x.salesMonthlyTotal.toLocaleString()} ({x.salesMonthlyPercentage}%)</div>
+                      <div className='details'>A: ${x.salesAnnualTotal.toLocaleString()} ({x.salesAnnualPercentage}%)</div>
                     </td>
                   )
                 }
