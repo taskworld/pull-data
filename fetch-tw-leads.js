@@ -5,10 +5,10 @@ const Moment = require('moment')
 const Mongo = require('./mongodb')
 const Util = require('./util')
 const Fs = require('fs')
+const Sendgrid = require('./lib/sendgrid')
+
 P.promisifyAll(Fs)
-
 const MAX_DOCS = 50000
-
 const tzToCountry = require('moment-timezone/data/meta/latest.json')
 
 // console.log(tzToCountry.zones['Asia/Tokyo'].countries)
@@ -28,6 +28,23 @@ function run () {
       [--from]        From date, e.g. 2016-07-01
       [--to]          To date, e.g. 2016-07-31
   `)
+}
+
+function * sendLeads (csvFile) {
+  const response = yield Sendgrid.sendEmail({
+    from: 'reports@taskworld.com',
+    to: 'nima.d@taskworld.com',
+    subject: `Taskworld Leads CSV ${Moment().format('YYYY-MM-DD')}`,
+    body: 'FYI. Leads!',
+    files: [
+      { path: csvFile, mime: 'text/plain' }
+    ]
+  })
+
+  // Truncate if the send went well.
+  if (response.statusCode !== 202) {
+    console.log('Sendgrid gave unexpected response:', response)
+  }
 }
 
 function fetchLeads ({ country, from, to }) {
@@ -185,6 +202,8 @@ function * exportLeads (db, opts) {
 
   // Dump to CSV.
   yield Util.writeCsv(report, reportFileName)
+
+  yield * sendLeads(reportFileName)
 }
 
 function dbRun (func, args) {
