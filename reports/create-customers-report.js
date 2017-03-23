@@ -40,6 +40,21 @@ function renderTaskworldReport (twCsvFile, adwordsCsvFile, deviceCsvFile) {
       if (x.licenses > 1000) x.licenses = 50
       x.amount = parseFloat(x.amount) || 0.0
 
+      const upgraded = parseFloat(x.upgraded) || 0.0
+      if (upgraded > 1.0) {
+        if (x.upgraded === x.currentPrice) {
+          // Upgrade without discount, use upgraded price as the only amount.
+          console.log(`Upgrade detected: ${x.amount} -> ${upgraded} ~= ${x.currentPrice} (requires refund)`)
+          x.amount = upgraded
+        } else if (upgraded < x.amount) {
+          // Downgrade, don’t do anything.
+        } else {
+          // Upgrade with discount, add upgrade amount to base amount.
+          console.log(`Upgrade detected: ${x.amount} + ${upgraded} ~= ${x.currentPrice}`)
+          x.amount += upgraded
+        }
+      }
+
       x.signupSource = ''
       x.channel = ''
       x.country = ''
