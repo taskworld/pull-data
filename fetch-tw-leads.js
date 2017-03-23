@@ -161,7 +161,7 @@ function * exportLeads (db, opts) {
       const membersCount = new Set(workspaceMembers).size - 1 // Excluding the system user.
 
       // Skip solo workspaces.
-      if (membersCount < 2) return false
+      // if (membersCount < 2) return false
 
       return {
         workspaceId: workspaceId,
