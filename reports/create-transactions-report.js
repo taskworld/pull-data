@@ -7,7 +7,7 @@ const Moment = require('moment')
 
 renderTaskworldReport('/tmp/tw-transaction-log.json')
 
-function createTxnEntry (ws, t) {
+function createTxnEntry (ws, t, firstStartDate) {
   return {
     workspaceId: ws._id.toString(),
     workspaceName: ws.workspaceName,
@@ -16,7 +16,8 @@ function createTxnEntry (ws, t) {
     billingPeriodStartDate: t.billingPeriodStartDate,
     currentBillingCycle: t.currentBillingCycle || 0,
     amount: t.amount ? parseInt(t.amount, 10) : 0,
-    plan: t.planId
+    plan: t.planId,
+    firstStartDate
   }
 }
 
@@ -25,13 +26,20 @@ function renderTaskworldReport (transactionsJsonFile) {
   const now = Moment()
 
   const report = data.reduce((acc, x) => {
-    x.transactions.forEach(y => {
+    let firstStartDate
+
+    x.transactions.forEach((y, i) => {
       let date = null
       if (y.billingPeriodStartDate) date = Moment(y.billingPeriodStartDate, 'YYYY-MM-DD')
       if (y.date) date = Moment(y.date)
       if (!date) {
         console.log('Missing date for transaction:', y)
         return
+      }
+
+      // Keep track of the first transaction.
+      if (i === 0) {
+        firstStartDate = date.format('YYYY-MM-DD')
       }
 
       const past = date.format('YYYY-MM')
@@ -44,7 +52,7 @@ function renderTaskworldReport (transactionsJsonFile) {
       if (!acc.past.items[past]) {
         acc.past.items[past] = []
       }
-      acc.past.items[past].push(createTxnEntry(x, y))
+      acc.past.items[past].push(createTxnEntry(x, y, firstStartDate))
       acc.past.stats.total += amount
 
       if (y.nextBillingDate) {
@@ -56,7 +64,7 @@ function renderTaskworldReport (transactionsJsonFile) {
           if (!acc.future.items[futureMonth]) {
             acc.future.items[futureMonth] = []
           }
-          acc.future.items[futureMonth].push(createTxnEntry(x, y))
+          acc.future.items[futureMonth].push(createTxnEntry(x, y, firstStartDate))
           acc.future.stats.total += amount
         }
       }
@@ -79,8 +87,8 @@ function renderTaskworldReport (transactionsJsonFile) {
     dates.forEach((date, i) => {
       const workspaceIds = new Set(map.items[date].map(x => x.workspaceId))
       const totals = map.items[date].reduce((acc, x) => {
-        const isRecurring = x.currentBillingCycle > 1
-        if (isRecurring) {
+        const startMonth = x.firstStartDate.substr(0, 7)
+        if (startMonth !== date) {
           acc.recurring += x.amount
         } else {
           acc.new += x.amount
