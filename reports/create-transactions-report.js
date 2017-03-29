@@ -5,30 +5,54 @@ const Path = require('path')
 const S3 = require('../lib/s3')
 const Moment = require('moment')
 
-renderTaskworldReport('/tmp/tw-transaction-log.json')
+createTransactionsReport('/tmp/tw-transaction-log.json')
 
 function createTxnEntry (ws, t, firstStartDate) {
+  const workspaceId = ws._id.toString()
   return {
-    workspaceId: ws._id.toString(),
+    workspaceId,
     workspaceName: ws.workspaceName,
     workspaceOwner: ws.workspaceOwner,
     workspaceEmail: ws.workspaceEmail,
     billingPeriodStartDate: t.billingPeriodStartDate,
     currentBillingCycle: t.currentBillingCycle || 0,
-    amount: t.amount ? parseInt(t.amount, 10) : 0,
+    amount: t.amount || 0,
+    upsoldAmount: t.upsoldAmount || 0,
     plan: t.planId,
     firstStartDate
   }
 }
 
-function renderTaskworldReport (transactionsJsonFile) {
+function createTransactionsReport (transactionsJsonFile) {
   const data = require(transactionsJsonFile)
   const now = Moment()
+
+  const upsold = data.reduce((acc, x) => {
+    const workspaceId = x._id.toString()
+
+    x.upsold.forEach(y => {
+      const month = Moment(y.date).format('YYYY-MM')
+      const amount = y.amount || 0
+
+      if (!acc[month]) {
+        acc[month] = { }
+      }
+      if (!acc[month][workspaceId]) {
+        acc[month][workspaceId] = 0
+      }
+      acc[month][workspaceId] += amount
+    })
+
+    return acc
+  }, { })
+  // console.log('upsold', upsold)
 
   const report = data.reduce((acc, x) => {
     let firstStartDate
 
     x.transactions.forEach((y, i) => {
+      const workspaceId = x._id.toString()
+
       let date = null
       if (y.billingPeriodStartDate) date = Moment(y.billingPeriodStartDate, 'YYYY-MM-DD')
       if (y.date) date = Moment(y.date)
@@ -47,13 +71,21 @@ function renderTaskworldReport (transactionsJsonFile) {
         console.log('Invalid date for transaction:', y)
       }
 
-      const amount = y.amount ? parseInt(y.amount, 10) : 0
+      const amount = y.amount || 0
 
       if (!acc.past.items[past]) {
         acc.past.items[past] = []
       }
-      acc.past.items[past].push(createTxnEntry(x, y, firstStartDate))
+
+      const entry = createTxnEntry(x, y, firstStartDate)
+      acc.past.items[past].push(entry)
       acc.past.stats.total += amount
+
+      if (upsold[past] && upsold[past][workspaceId]) {
+        const upsoldAmount = upsold[past][workspaceId]
+        acc.past.stats.total += upsoldAmount
+        entry.upsoldAmount = upsoldAmount
+      }
 
       if (y.nextBillingDate) {
         const futureDay = Moment(y.nextBillingDate, 'YYYY-MM-DD')
@@ -69,6 +101,7 @@ function renderTaskworldReport (transactionsJsonFile) {
         }
       }
     })
+
     return acc
   }, {
     past: {
@@ -93,18 +126,24 @@ function renderTaskworldReport (transactionsJsonFile) {
         } else {
           acc.new += x.amount
         }
+        if (x.upsoldAmount) {
+          acc.upsold += x.upsoldAmount
+        }
         return acc
       }, {
         new: 0,
-        recurring: 0
+        recurring: 0,
+        upsold: 0
       })
 
-      const totalForDate = totals.new + totals.recurring
+      const totalForDate = totals.new + totals.recurring + totals.upsold
+
       console.log(
         `${date}: ${pad(workspaceIds.size)} workspaces, ` +
         `amounts:` +
-        `${pad('$' + totals.new.toLocaleString(), 10)} new` +
-        `${pad('$' + totals.recurring.toLocaleString(), 10)} recur - ` +
+        `${pad('$' + Math.round(totals.new).toLocaleString(), 10)} new` +
+        `${pad('$' + Math.round(totals.recurring).toLocaleString(), 10)} recur` +
+        `${pad('$' + Math.round(totals.upsold).toLocaleString(), 10)} upsold - ` +
         `${pad('$' + totalForDate.toLocaleString(), 10)}`
       )
     })

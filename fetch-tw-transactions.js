@@ -13,6 +13,7 @@ function * run (db, args) {
   console.log('Pulling transactions ..')
   const history = yield * getTransactionHistory(db)
 
+  yield * getUpsoldTransactions(db, history)
   yield * getWorkspaceInfoForHistory(db, history)
 
   const reportFileName = `/tmp/tw-transaction-log.json`
@@ -74,7 +75,8 @@ function * getWorkspaceInfoForHistory (db, history) {
 function * getTransactionHistory (db, opts) {
   const $match = {
     action: 'subscription_charged_successfully',
-    workspace_id: { $exists: true }
+    workspace_id: { $exists: true },
+    success: true
   }
   const $project = {
     workspace_id: 1,
@@ -114,4 +116,39 @@ function * getTransactionHistory (db, opts) {
     { $sort: $sort2 }
   ])
   .toArray()
+}
+
+function * getUpsoldTransactions (db, history) {
+  const $project = {
+    workspace_id: 1,
+    created: 1,
+    transaction_amount: 1,
+    membership: 1
+  }
+
+  const upsoldTransactions = yield db.collection('transaction_logs')
+  .find({
+    action: 'makeSale',
+    workspace_id: { $exists: true },
+    success: true
+  })
+  .project($project)
+  .sort({ created: 1 })
+  .toArray()
+
+  const upsoldMap = upsoldTransactions.reduce((acc, x) => {
+    if (!acc[x.workspace_id]) {
+      acc[x.workspace_id] = []
+    }
+    acc[x.workspace_id].push({
+      date: x.created,
+      amount: x.transaction_amount
+    })
+    return acc
+  }, { })
+
+  history.forEach(x => {
+    const workspaceId = x._id.toString()
+    x.upsold = upsoldMap[workspaceId] || []
+  })
 }
