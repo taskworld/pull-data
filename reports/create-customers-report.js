@@ -106,7 +106,7 @@ function renderTaskworldReport (twCsvFile, adwordsCsvFile, deviceCsvFile) {
     getAverageLifetimeValue(report)
 
     // DUMP !
-    // console.log(JSON.stringify(report.rows, null, 2))
+    console.log(JSON.stringify(report.report.monthly, null, 2))
 
     html = html
     .replace('{{DATA}}', JSON.stringify(report, null, 2))
@@ -315,6 +315,7 @@ function getStatsForPeriod (startDate, endDate, twRows) {
   }
 
   const licensePriceInPeriod = licensesInPeriod ? (monthlyRecurringRevenue / licensesInPeriod) : 0
+  const countries = getLicensesByTopCountries(rowsInPeriod)
 
   const debug = false
   if (debug) {
@@ -352,8 +353,33 @@ function getStatsForPeriod (startDate, endDate, twRows) {
     salesMonthlyTotal,
     salesAnnualTotal,
     salesMonthlyPercentage,
-    salesAnnualPercentage
+    salesAnnualPercentage,
+    countries
   }
+}
+
+function getLicensesByTopCountries (rows) {
+  let otherCount = 0
+
+  const map = rows.reduce((acc, x) => {
+    const country = x.country
+    if (country) {
+      if (!acc[country]) acc[country] = 0
+      acc[country] += x.licenses
+    } else {
+      otherCount += x.licenses
+    }
+    return acc
+  }, { })
+
+  const sorted1 = Object.keys(map).map(x => [x, map[x]])
+  sorted1.sort((a, b) => a[1] > b[1] ? -1 : 1)
+
+  const sorted2 = sorted1.slice(0, 10)
+  const restCount = sorted1.slice(10).reduce((acc, x) => acc + x[1], 0)
+  sorted2.push(['Other', restCount + otherCount])
+
+  return sorted2
 }
 
 function isRealCustomer (x) {

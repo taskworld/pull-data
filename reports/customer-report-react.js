@@ -209,6 +209,17 @@ class App extends React.Component {
                 </td>
               ))}
             </tr>
+
+            <tr>
+              <td>Licenses by Country:</td>
+              {report.monthly.map((x, i) => (
+                <td className='percentage' key={i}>
+                  {x.countries.map(y => (
+                    <div className='details'>{y[0]}: {y[1]}</div>
+                  ))}
+                </td>
+              ))}
+            </tr>
           </tbody>
         </table>
       </div>
