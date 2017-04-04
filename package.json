@@ -7,7 +7,8 @@
   "scripts": {
     "weekly": "nodemon --ext html,js --watch reports reports/create-weekly-stats-report.js",
     "customers": "nodemon --verbose --ext js,html --watch reports reports/create-customers-report.js",
-    "marketing": "nodemon --ext js,html --watch reports reports/create-marketing-performance-report.js"
+    "marketing": "nodemon --ext js,html --watch reports reports/create-marketing-performance-report.js",
+    "transactions": "nodemon --verbose --ext js,html --watch reports reports/create-transactions-report.js"
   },
   "author": "",
   "license": "ISC",

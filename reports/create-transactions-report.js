@@ -17,6 +17,7 @@ function createTxnEntry (ws, t, firstStartDate) {
     billingPeriodStartDate: t.billingPeriodStartDate,
     currentBillingCycle: t.currentBillingCycle || 0,
     amount: t.amount || 0,
+    licenses: t.licenses,
     upsoldAmount: t.upsoldAmount || 0,
     plan: t.planId,
     firstStartDate
@@ -45,7 +46,6 @@ function createTransactionsReport (transactionsJsonFile) {
 
     return acc
   }, { })
-  // console.log('upsold', upsold)
 
   const report = data.reduce((acc, x) => {
     let firstStartDate
@@ -114,16 +114,24 @@ function createTransactionsReport (transactionsJsonFile) {
     }
   })
 
-  const print = map => {
+  // console.log(JSON.stringify(report, null, 2))
+
+  const createReport = map => {
+    const rows = []
+
     let dates = Object.keys(map.items)
     dates.sort()
-    dates.forEach((date, i) => {
-      const workspaceIds = new Set(map.items[date].map(x => x.workspaceId))
-      const totals = map.items[date].reduce((acc, x) => {
+
+    dates.forEach((month, i) => {
+      const totals = map.items[month].reduce((acc, x) => {
         const startMonth = x.firstStartDate.substr(0, 7)
-        if (startMonth !== date) {
+        if (startMonth !== month) {
           acc.recurring += x.amount
         } else {
+          if (x.licenses) {
+            if (x.licenses > 250) x.licenses = 50
+            acc.licenses += x.licenses
+          }
           acc.new += x.amount
         }
         if (x.upsoldAmount) {
@@ -131,45 +139,45 @@ function createTransactionsReport (transactionsJsonFile) {
         }
         return acc
       }, {
+        month,
+        workspaces: new Set(map.items[month].map(x => x.workspaceId)).size,
         new: 0,
         recurring: 0,
-        upsold: 0
+        upsold: 0,
+        total: 0,
+        licenses: 0
       })
 
-      const totalForDate = totals.new + totals.recurring + totals.upsold
+      totals.new = Math.round(totals.new)
+      totals.recurring = Math.round(totals.recurring)
+      totals.upsold = Math.round(totals.upsold)
+      totals.total = totals.new + totals.recurring + totals.upsold
 
-      console.log(
-        `${date}: ${pad(workspaceIds.size)} workspaces, ` +
-        `amounts:` +
-        `${pad('$' + Math.round(totals.new).toLocaleString(), 10)} new` +
-        `${pad('$' + Math.round(totals.recurring).toLocaleString(), 10)} recur` +
-        `${pad('$' + Math.round(totals.upsold).toLocaleString(), 10)} upsold - ` +
-        `${pad('$' + totalForDate.toLocaleString(), 10)}`
-      )
+      rows.push(totals)
     })
+
+    return rows
   }
 
-  console.log('Past Payments:')
-  print(report.past)
+  const past = createReport(report.past)
+  const future = createReport(report.future)
 
-  console.log('Future Payments:')
-  print(report.future)
+  // console.log(JSON.stringify(past, null, 2))
 
-  // let html = Fs.readFileSync(Path.join(__dirname, 'layout.html'), 'utf8')
-  //
-  // html = html
-  // .replace('{{DATA}}', Fs.readFileSync(transactionsJsonFile, 'utf8'))
-  // .replace('{{SCRIPT}}', Fs.readFileSync(Path.join(__dirname, 'transactions-report-react.js'), 'utf8'))
-  //
-  // const reportFile = '/tmp/transactions-report.html'
-  // Fs.writeFileSync(reportFile, html)
-  //
-  // if (process.argv[2] === 'upload') {
-  //   S3.uploadToS3(S3.createItem(reportFile))
-  //   .then(res => {
-  //     console.log('res=', res)
-  //   })
-  // }
+  let html = Fs.readFileSync(Path.join(__dirname, 'layout.html'), 'utf8')
+  html = html
+  .replace('{{DATA}}', JSON.stringify({ past, future }))
+  .replace('{{SCRIPT}}', Fs.readFileSync(Path.join(__dirname, 'transactions-report-react.js'), 'utf8'))
+
+  const reportFile = '/tmp/transactions-report.html'
+  Fs.writeFileSync(reportFile, html)
+
+  if (process.argv[2] === 'upload') {
+    S3.uploadToS3(S3.createItem(reportFile))
+    .then(res => {
+      console.log('res=', res)
+    })
+  }
 }
 
 function pad (str, size = 6) {
