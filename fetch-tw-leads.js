@@ -12,13 +12,13 @@ const MAX_DOCS = 50000
 const tzToCountry = require('moment-timezone/data/meta/latest.json')
 
 // console.log(tzToCountry.zones['Asia/Tokyo'].countries)
-run()
+P.coroutine(run)()
 
-function run () {
+function * run () {
   const args = require('minimist')(process.argv.slice(2))
 
   if (args.leads) {
-    return fetchLeads(args)
+    return yield * fetchLeads(args)
   }
 
   console.log(`
@@ -47,20 +47,34 @@ function * sendLeads (csvFile) {
   }
 }
 
-function fetchLeads ({ country, from, to }) {
+function * fetchLeads ({ country, from, to, send }) {
   const countries = (country || '').trim().split(/\s*,\s*/)
-  const startDate = from ? Moment(from, 'YYYY-MM-DD') : Moment().subtract(1, 'day').startOf('day')
-  const endDate = to ? Moment(to, 'YYYY-MM-DD') : Moment().subtract(1, 'day').endOf('day')
+  const startDate = from ? Moment(from, 'YYYY-MM-DD') : Moment().subtract(4, 'day').startOf('day')
+  const endDate = to ? Moment(to, 'YYYY-MM-DD') : Moment().add(1, 'day').endOf('day')
+
   console.log(`
   Fetching leads:
   Countries:        ${countries.join(', ')}
   Membership range: ${startDate.format()} - ${endDate.format()}
   `)
-  return dbRun(exportLeads, {
+
+  const report = yield dbRun(exportLeads, {
     countries,
     startDate,
     endDate
   })
+
+  const reportFileName = `/tmp/tw-leads.csv`
+  console.log(`Creating ${reportFileName} with ${report.length} rows ..`)
+
+  // Dump to CSV.
+  yield Util.writeCsv(report, reportFileName)
+
+  if (send) {
+    yield * sendLeads(reportFileName)
+  }
+
+  console.log('Done.')
 }
 
 function * exportLeads (db, opts) {
@@ -197,17 +211,11 @@ function * exportLeads (db, opts) {
     }
   })
 
-  const reportFileName = `/tmp/tw-leads.csv`
-  console.log(`Creating ${reportFileName} with ${report.length} rows ..`)
-
-  // Dump to CSV.
-  yield Util.writeCsv(report, reportFileName)
-
-  yield * sendLeads(reportFileName)
+  return report
 }
 
 function dbRun (func, args) {
   return Mongo.query(func, args)
-  .then(Mongo.close)
-  .catch((err) => console.error(err))
+  .catch(err => console.error(err))
+  .finally(Mongo.close)
 }
