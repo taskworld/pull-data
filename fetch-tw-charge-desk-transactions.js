@@ -5,6 +5,7 @@ Assert(process.env.PULLDATA_CHARGE_DESK_SECRET, 'Missing env PULLDATA_CHARGE_DES
 
 const P = require('bluebird')
 const Exec = require('child_process').exec
+const Path = require('path')
 const Fs = require('fs')
 const Moment = require('moment')
 
@@ -16,6 +17,7 @@ P.promisifyAll(Fs)
 const REPORT_FILE_NAME = '/tmp/tw-charge-desk-transactions.csv'
 const DAY_STATS_FILE_NAME = '/tmp/tw-charge-desk-day-stats.csv'
 const MONTH_STATS_FILE_NAME = '/tmp/tw-charge-desk-month-stats.csv'
+const HTML_REPORT_FILE_NAME = '/tmp/tw-charge-desk-transactions.html'
 const MAX_DOCS = 500
 
 P.coroutine(run)(require('minimist')(process.argv.slice(2)))
@@ -150,18 +152,46 @@ function * createReport (args) {
     { name: 'month', filename: MONTH_STATS_FILE_NAME }
   ]
 
-  for (const r of statsReports) {
-    const rows = getReport(r.name)
-    yield Util.writeCsv(rows, r.filename)
-    if (args.upload) {
-      const res = yield S3.uploadToS3(S3.createItem(r.filename))
-      const expiresMatch = /Expires=(\d+)/.exec(res.signedUrl)
-      const expiresDate = new Date(parseInt(expiresMatch[1], 10) * 1000)
-      console.log(`Signed URL (expires: ${expiresDate}):\n${res.signedUrl}\n`)
+  // Create CSV reports.
+  if (args.csv) {
+    for (const r of statsReports) {
+      const rows = getReport(r.name)
+      yield Util.writeCsv(rows, r.filename)
+
+      if (args.upload) yield * upload(r.filename)
     }
   }
 
+  // Create HTML report.
+  if (args.html) {
+    const data = {
+      transactions: report
+    }
+
+    for (const r of statsReports) {
+      data[r.name] = getReport(r.name)
+    }
+
+    const layout = Path.join(__dirname, 'reports', 'layout.html')
+    const template = Path.join(__dirname, 'reports', 'charge-desk-transactions-report-react.js')
+
+    let html = Fs.readFileSync(layout, 'utf8')
+    html = html
+    .replace('{{DATA}}', JSON.stringify(data, null, 2))
+    .replace('{{SCRIPT}}', Fs.readFileSync(template, 'utf8'))
+    Fs.writeFileSync(HTML_REPORT_FILE_NAME, html)
+
+    if (args.upload) yield * upload(HTML_REPORT_FILE_NAME)
+  }
+
   console.log('It’s a Done Deal.')
+}
+
+function * upload (filename) {
+  const res = yield S3.uploadToS3(S3.createItem(filename))
+  const expiresMatch = /Expires=(\d+)/.exec(res.signedUrl)
+  const expiresDate = new Date(parseInt(expiresMatch[1], 10) * 1000)
+  console.log(`Signed URL (expires: ${expiresDate}):\n${res.signedUrl}\n`)
 }
 
 function * fetch (opts) {
