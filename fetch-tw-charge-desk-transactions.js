@@ -31,10 +31,19 @@ function * run (opts) {
     return yield * createReport(opts)
   }
 
+  if (opts.all) {
+    if (yield * fetch(opts)) {
+      yield * createReport(opts)
+    }
+    return
+  }
+
   console.log(`
-  Usage: node fetch-tw-charge-desk-transactions.js
-    --fetch           Fetch / Update transactions from ChargeDesk
-    --report          Create a report based on ChargeDesk transaction history
+    node fetch-tw-charge-desk-transactions.js
+
+      --fetch     Fetch / Update transactions from ChargeDesk.
+      --report    Create a report based on ChargeDesk transaction history.
+      --all       Both fetch and create a new report.
   `)
 }
 
@@ -46,7 +55,6 @@ function * createReport (args) {
   }
 
   const report = yield Util.readCsv(REPORT_FILE_NAME)
-  // console.log(report.slice(0, 3))
 
   const refundedStatus = {
     'refunded': 1,
@@ -145,10 +153,12 @@ function * createReport (args) {
   for (const r of statsReports) {
     const rows = getReport(r.name)
     yield Util.writeCsv(rows, r.filename)
-    const res = yield S3.uploadToS3(S3.createItem(r.filename))
-    const expiresMatch = /Expires=(\d+)/.exec(res.signedUrl)
-    const expiresDate = new Date(parseInt(expiresMatch[1], 10) * 1000)
-    console.log(`Signed URL (expires: ${expiresDate}):\n${res.signedUrl}\n`)
+    if (args.upload) {
+      const res = yield S3.uploadToS3(S3.createItem(r.filename))
+      const expiresMatch = /Expires=(\d+)/.exec(res.signedUrl)
+      const expiresDate = new Date(parseInt(expiresMatch[1], 10) * 1000)
+      console.log(`Signed URL (expires: ${expiresDate}):\n${res.signedUrl}\n`)
+    }
   }
 
   console.log('It’s a Done Deal.')
@@ -174,8 +184,8 @@ function * fetch (opts) {
 
   while (true) {
     let txns = yield * getChargeDeskTransactions(offset, max)
-    // console.log(JSON.stringify(txns, null, 2))
     if (!txns.length) break
+
     console.log(`Fetched ${txns.length} transactions (total: ${offset}) from charge desk ..`)
 
     if (lastInvoice) {
@@ -184,7 +194,7 @@ function * fetch (opts) {
         const newRows = txns.slice(0, foundExistingInvoiceAt)
         if (!newRows.length) {
           console.log('No new rows found, exiting ..')
-          return
+          return false
         }
         report = report.concat(newRows)
         console.log(`Found an existing row at index ${foundExistingInvoiceAt}, we’re done !`)
@@ -196,7 +206,16 @@ function * fetch (opts) {
     report = report.concat(txns)
   }
 
+  // Unique and sort on occurred field.
+  const reportUnique = { }
+  report.forEach(x => {
+    reportUnique[x.invoice_url] = x
+  })
+  report = Object.keys(reportUnique).map(x => reportUnique[x])
+  report.sort((a, b) => a.occurred < b.occurred ? 1 : -1)
+
   yield Util.writeCsv(report, REPORT_FILE_NAME)
+  return true
 }
 
 function hasFile (file) {
@@ -215,24 +234,30 @@ function * getChargeDeskTransactions (offset, max) {
 }
 
 function toTransactionRows (data) {
+  // DUMP !
+  // data.data.forEach(x => {
+  //   if (!x.product_id) console.log(JSON.stringify(x, null, 2))
+  // })
+
   return data.data.map(x => {
     return {
       occurred: Moment.unix(x.occurred).format(),
       occurred_relative: x.occurred_relative,
-      customer_email: x.customer_email,
-      customer_name: x.customer_name,
-      customer_country: x.customer_country,
-      gateway_id: x.gateway_id,
+      product_id: x.product_id,
       amount: parseFloat(x.amount),
       amount_refunded: parseFloat(x.amount_refunded),
       amount_formatted: x.amount_formatted,
       status: x.status,
+      customer_email: x.customer_email,
+      customer_name: x.customer_name,
+      customer_country: x.customer_country,
+      customer_id: x.customer_id,
       currency: x.currency,
+      gateway_id: x.gateway_id,
       payment_method_brand: x.payment_method_brand,
       payment_method_bank: x.payment_method_bank,
       payment_method_describe: x.payment_method_describe,
-      invoice_url: x.invoice_url,
-      customer_id: x.customer_id
+      invoice_url: x.invoice_url
     }
   })
 }
