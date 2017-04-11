@@ -73,8 +73,8 @@ function * createReport (args) {
 
   const stats = report.reduce((acc, x) => {
     const amount = parseInt(x.amount, 10)
-    const day = Moment(x.occurred).format('YYYY-MM-DD')
-    const month = Moment(x.occurred).format('YYYY-MM')
+    const day = Moment(x.occurred).utcOffset('+07:00').format('YYYY-MM-DD')
+    const month = Moment(x.occurred).utcOffset('+07:00').format('YYYY-MM')
     const country = x.customer_country || 'N/A'
 
     if (!acc.day[day]) {
@@ -241,7 +241,7 @@ function toTransactionRows (data) {
 
   return data.data.map(x => {
     return {
-      occurred: Moment.unix(x.occurred).format(),
+      occurred: Moment.unix(x.occurred).utc().format(),
       occurred_relative: x.occurred_relative,
       product_id: x.product_id,
       amount: parseFloat(x.amount),
