@@ -19,6 +19,7 @@ const DAY_STATS_FILE_NAME = '/tmp/tw-charge-desk-day-stats.csv'
 const MONTH_STATS_FILE_NAME = '/tmp/tw-charge-desk-month-stats.csv'
 const HTML_REPORT_FILE_NAME = '/tmp/tw-charge-desk-transactions.html'
 const MAX_DOCS = 500
+const MAX_ROWS = 1500
 
 P.coroutine(run)(require('minimist')(process.argv.slice(2)))
 
@@ -77,14 +78,12 @@ function * createReport (args) {
     const amount = parseInt(x.amount, 10)
     const day = Moment(x.occurred).utcOffset('+07:00').format('YYYY-MM-DD')
     const month = Moment(x.occurred).utcOffset('+07:00').format('YYYY-MM')
-    const country = x.customer_country || 'N/A'
 
     if (!acc.day[day]) {
       acc.day[day] = {
         total: 0,
         refunded: 0,
-        canceled: 0,
-        country: { }
+        canceled: 0
       }
     }
 
@@ -92,8 +91,7 @@ function * createReport (args) {
       acc.month[month] = {
         total: 0,
         refunded: 0,
-        canceled: 0,
-        country: { }
+        canceled: 0
       }
     }
 
@@ -101,12 +99,6 @@ function * createReport (args) {
       // console.log(`status: ${x.status}, amount: ${x.amount_formatted}`)
       acc.day[day].total += amount
       acc.month[month].total += amount
-
-      if (!acc.day[day].country[country]) acc.day[day].country[country] = 0
-      acc.day[day].country[country] += amount
-
-      if (!acc.month[month].country[country]) acc.month[month].country[country] = 0
-      acc.month[month].country[country] += amount
     }
 
     if (refundedStatus[x.status]) {
@@ -133,15 +125,11 @@ function * createReport (args) {
     dates.sort((a, b) => a < b ? 1 : -1)
     dates.forEach(date => {
       const dateStats = stats[field][date]
-      const dateByCountryStats = Object.keys(dateStats.country).map(x => [x, dateStats.country[x]])
-      dateByCountryStats.sort((a, b) => a[1] < b[1] ? 1 : -1)
-      const countryString = dateByCountryStats.map(x => `${x[0]}: ${x[1].toLocaleString()}`).join(', ')
       rows.push({
         date,
         total: dateStats.total.toLocaleString(),
         refunded: dateStats.refunded.toLocaleString(),
-        canceled: dateStats.canceled.toLocaleString(),
-        countryString
+        canceled: dateStats.canceled.toLocaleString()
       })
     })
     return rows
@@ -201,16 +189,7 @@ function * fetch (opts) {
 
   let offset = 0
   let max = MAX_DOCS
-
   let report = []
-  let lastInvoice = null
-
-  if (hasFile(REPORT_FILE_NAME)) {
-    report = yield Util.readCsv(REPORT_FILE_NAME)
-    lastInvoice = report[0].invoice_url
-    max = 50 // Fetch 50 at a time if we’re updating an existing report!
-    console.log(`Updating existing report with ${report.length} rows !`)
-  }
 
   while (true) {
     let txns = yield * getChargeDeskTransactions(offset, max)
@@ -218,30 +197,16 @@ function * fetch (opts) {
 
     console.log(`Fetched ${txns.length} transactions (total: ${offset}) from charge desk ..`)
 
-    if (lastInvoice) {
-      const foundExistingInvoiceAt = txns.findIndex(x => x.invoice_url === lastInvoice)
-      if (foundExistingInvoiceAt !== -1) {
-        const newRows = txns.slice(0, foundExistingInvoiceAt)
-        if (!newRows.length) {
-          console.log('No new rows found, exiting ..')
-          return false
-        }
-        report = report.concat(newRows)
-        console.log(`Found an existing row at index ${foundExistingInvoiceAt}, we’re done !`)
-        break
-      }
-    }
-
     offset += txns.length
     report = report.concat(txns)
+
+    if (report.length > MAX_ROWS) {
+      report = report.slice(0, MAX_ROWS)
+      break
+    }
   }
 
-  // Unique and sort on occurred field.
-  const reportUnique = { }
-  report.forEach(x => {
-    reportUnique[x.invoice_url] = x
-  })
-  report = Object.keys(reportUnique).map(x => reportUnique[x])
+  // Sort on occurred field.
   report.sort((a, b) => a.occurred < b.occurred ? 1 : -1)
 
   yield Util.writeCsv(report, REPORT_FILE_NAME)
@@ -260,14 +225,14 @@ function hasFile (file) {
 function * getChargeDeskTransactions (offset, max) {
   const command = `curl -u ${process.env.PULLDATA_CHARGE_DESK_SECRET}: 'https://api.chargedesk.com/v1/charges?count=${max}&offset=${offset}'`
   const result = yield exec(command)
-  return toTransactionRows(JSON.parse(result))
+  return toTransactionRows(JSON.parse(result), offset)
 }
 
-function toTransactionRows (data) {
-  // DUMP !
-  // data.data.forEach(x => {
-  //   if (!x.product_id) console.log(JSON.stringify(x, null, 2))
-  // })
+function toTransactionRows (data, offset) {
+  // Dump first row.
+  if (offset === 0 && data && data.data) {
+    console.log(JSON.stringify(data.data[0], null, 2))
+  }
 
   return data.data.map(x => {
     return {
@@ -284,9 +249,11 @@ function toTransactionRows (data) {
       customer_id: x.customer_id,
       currency: x.currency,
       gateway_id: x.gateway_id,
+      payment_method: x.payment_method,
       payment_method_brand: x.payment_method_brand,
       payment_method_bank: x.payment_method_bank,
       payment_method_describe: x.payment_method_describe,
+      charge_id: x.charge_id,
       invoice_url: x.invoice_url
     }
   })

@@ -42,12 +42,13 @@ class App extends React.Component {
           <thead>
             <tr>
               <th>Date</th>
-              <th>Ago</th>
               <th>Product</th>
               <th>Amount</th>
               <th>Status</th>
+              <th>Payment Method</th>
               <th>Customer Name</th>
               <th>Customer Email</th>
+              <th>Payment Bank</th>
               <th>Refunded</th>
             </tr>
           </thead>
@@ -120,12 +121,13 @@ const TransactionsReportRow = ({ row, remaining, opts }) => {
   return (
     <tr className={newCls}>
       <td>{moment(row.occurred).format('YYYY-MM-DD HH:mm')}</td>
-      <td style={ar}>{row.occurred_relative}</td>
-      <td style={ar}>{row.product_id}</td>
+      <td>{row.product_id}</td>
       <td style={ar}>$ {parseInt(row.amount, 10).toLocaleString()}</td>
-      <td style={ar}>{row.status}</td>
+      <td>{row.status}</td>
+      <td>{row.payment_method_describe}</td>
       <td>{row.customer_name}</td>
       <td>{row.customer_email}</td>
+      <td>{row.payment_method_bank}</td>
       <td style={ar}>$ {parseInt(row.amount_refunded, 10).toLocaleString()}</td>
     </tr>
   )
