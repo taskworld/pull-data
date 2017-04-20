@@ -19,7 +19,7 @@ const DAY_STATS_FILE_NAME = '/tmp/tw-charge-desk-day-stats.csv'
 const MONTH_STATS_FILE_NAME = '/tmp/tw-charge-desk-month-stats.csv'
 const HTML_REPORT_FILE_NAME = '/tmp/tw-charge-desk-transactions.html'
 const MAX_DOCS = 500
-const MAX_ROWS = 1500
+const MAX_ROWS = 2000
 
 P.coroutine(run)(require('minimist')(process.argv.slice(2)))
 
@@ -200,7 +200,7 @@ function * fetch (opts) {
     offset += txns.length
     report = report.concat(txns)
 
-    if (report.length > MAX_ROWS) {
+    if (report.length >= MAX_ROWS) {
       report = report.slice(0, MAX_ROWS)
       break
     }
@@ -209,8 +209,59 @@ function * fetch (opts) {
   // Sort on occurred field.
   report.sort((a, b) => a.occurred < b.occurred ? 1 : -1)
 
+  report = filterDuplicatePayPalTransactions(report)
+
   yield Util.writeCsv(report, REPORT_FILE_NAME)
   return true
+}
+
+function filterDuplicatePayPalTransactions (report) {
+  // Filter out duplicate PayPal transactions.
+  let lastDate = null
+  let lastGatewayId = null
+  let lastAmount = null
+  let lastRow = null
+  let lastIndex = 0
+
+  const duplicatePayPalTransactions = []
+
+  report.forEach((x, i) => {
+    const date = Moment(x.occurred)
+    const gatewayId = x.gateway_id
+    const amount = x.amount
+
+    if (lastDate) {
+      const min = lastDate.clone().subtract(20, 'seconds')
+      const max = lastDate.clone().add(2, 'seconds')
+
+      const isWithin20Seconds = date.isBetween(min, max)
+      const isPayPalFollowedByBrainTree = lastGatewayId === 'paypal' && gatewayId === 'braintree-payments'
+      const isSameAmount = lastAmount === amount
+
+      if (isWithin20Seconds && isPayPalFollowedByBrainTree && isSameAmount) {
+        // console.log('Found duplicate PayPal transaction:')
+        // console.log(`[1] ${pad(lastRow.gateway_id, 20)} ${pad('$' + lastRow.amount, 10)} ${lastRow.customer_email} ${lastRow.customer_name}.`)
+        // console.log(`[2] ${pad(gatewayId, 20)} ${pad('$' + x.amount, 10)} ${x.customer_email} ${x.customer_name}.`)
+        duplicatePayPalTransactions.push(lastIndex)
+      }
+    }
+
+    lastDate = date
+    lastGatewayId = gatewayId
+    lastAmount = amount
+    lastRow = x
+    lastIndex = i
+  })
+
+  const filtered = report.filter((x, i) => !duplicatePayPalTransactions.includes(i))
+  console.log(`Removed ${report.length - filtered.length} / ${report.length} duplicate PayPal transaction rows.`)
+  return filtered
+}
+
+function pad (str, width = 30) {
+  const s = String(str)
+  const l = width - s.length
+  return ' '.repeat(l < 0 ? 0 : l) + str
 }
 
 function hasFile (file) {
@@ -253,7 +304,6 @@ function toTransactionRows (data, offset) {
       payment_method_brand: x.payment_method_brand,
       payment_method_bank: x.payment_method_bank,
       payment_method_describe: x.payment_method_describe,
-      charge_id: x.charge_id,
       invoice_url: x.invoice_url
     }
   })
