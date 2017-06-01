@@ -11,7 +11,7 @@ const Util = require('../util')
 const REAL_CUSTOMER_AFTER_SUBSCRIBED_DAYS = 45
 const MAX_MONTHS = 6
 
-// Moment.tz.setDefault('America/Chicago') // CST
+Moment.tz.setDefault('America/Chicago') // CST
 
 renderTaskworldReport(
   '/tmp/tw-data.csv',
