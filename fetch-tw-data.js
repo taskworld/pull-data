@@ -42,9 +42,6 @@ function pullDataFromMongoDb (startDate, endDate) {
 
 const _blacklistedEmails = [
   '@mailinator.com',
-  '@mouawad.com',
-  '@taskworld.com',
-  '@synovafoods.com',
   'dadademau@gmail.com'
 ]
 const _blacklistedEmailsRegexp = new RegExp(

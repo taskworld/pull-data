@@ -3,13 +3,15 @@
 const P = require('bluebird')
 const Fs = require('fs')
 const Path = require('path')
-const Moment = require('moment')
+const Moment = require('moment-timezone')
 const S3 = require('../lib/s3')
 
 const Util = require('../util')
 
 const REAL_CUSTOMER_AFTER_SUBSCRIBED_DAYS = 45
 const MAX_MONTHS = 6
+
+// Moment.tz.setDefault('America/Chicago') // CST
 
 renderTaskworldReport(
   '/tmp/tw-data.csv',
