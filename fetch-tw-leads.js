@@ -6,6 +6,7 @@ const Mongo = require('./mongodb')
 const Util = require('./util')
 const Fs = require('fs')
 const Sendgrid = require('./lib/sendgrid')
+const S3 = require('./lib/s3')
 
 P.promisifyAll(Fs)
 const MAX_DOCS = 50000
@@ -27,6 +28,7 @@ function * run () {
       [--country]     One or more country codes, e.g DE,SE,KR
       [--from]        From date, e.g. 2016-07-01
       [--to]          To date, e.g. 2016-07-31
+      [--upload]      Upload report to secret S3 location.
   `)
 }
 
@@ -47,7 +49,7 @@ function * sendLeads (csvFile) {
   }
 }
 
-function * fetchLeads ({ country, from, to, send }) {
+function * fetchLeads ({ country, from, to, send, upload }) {
   const countries = (country || '').trim().split(/\s*,\s*/)
   const startDate = from ? Moment(from, 'YYYY-MM-DD') : Moment().subtract(4, 'day').startOf('day')
   const endDate = to ? Moment(to, 'YYYY-MM-DD') : Moment().add(1, 'day').endOf('day')
@@ -72,6 +74,11 @@ function * fetchLeads ({ country, from, to, send }) {
 
   if (send) {
     yield * sendLeads(reportFileName)
+  }
+
+  if (upload) {
+    const res = yield S3.uploadToS3(S3.createItem(reportFileName, 'tw-leads'))
+    console.log('res=', res)
   }
 
   console.log('Done.')
