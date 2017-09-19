@@ -8,7 +8,9 @@
     "weekly": "nodemon --ext html,js --watch reports reports/create-weekly-stats-report.js",
     "customers": "nodemon --verbose --ext js,html --watch reports reports/create-customers-report.js",
     "marketing": "nodemon --ext js,html --watch reports reports/create-marketing-performance-report.js",
-    "transactions": "nodemon --verbose --ext js,html --watch reports reports/create-transactions-report.js"
+    "transactions": "nodemon --verbose --ext js,html --watch reports reports/create-transactions-report.js",
+    "dev-customers": "NODE_ENV=dev node ./reports/create-customers-report.js && webpack-dev-server",
+    "prod-customers": "webpack && node ./reports/create-customers-report.js upload"
   },
   "author": "",
   "license": "ISC",
@@ -17,21 +19,36 @@
   },
   "dependencies": {
     "aws-sdk": "^2.6.1",
+    "babel-plugin-transform-object-rest-spread": "^6.26.0",
     "bluebird": "^3.4.2",
     "braintree": "^1.41.0",
     "chalk": "^1.1.3",
+    "classnames": "^2.2.5",
+    "dotenv": "^4.0.0",
     "fast-csv": "^2.1.0",
+    "firebase": "^4.3.1",
     "googleapis": "^12.4.0",
+    "immutable": "^3.8.1",
     "mimer": "^0.2.1",
     "minimist": "^1.2.0",
-    "moment": "^2.14.1",
+    "moment": "^2.18.1",
     "moment-timezone": "^0.5.11",
     "mongodb": "^2.2.9",
     "paypal-rest-sdk": "^1.6.9",
+    "react": "^15.6.1",
+    "react-dom": "^15.6.1",
     "sendgrid": "^4.5.0",
-    "tcomb": "^3.2.13"
+    "tcomb": "^3.2.13",
+    "updeep": "^1.0.0"
   },
   "devDependencies": {
-    "nodemon": "^1.10.2"
+    "babel-core": "^6.26.0",
+    "babel-loader": "^7.1.2",
+    "babel-plugin-transform-class-properties": "^6.24.1",
+    "babel-preset-es2017": "^6.24.1",
+    "babel-preset-react": "^6.24.1",
+    "nodemon": "^1.10.2",
+    "webpack": "^3.6.0",
+    "webpack-dev-server": "^2.8.2"
   }
 }

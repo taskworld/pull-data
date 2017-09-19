@@ -1,0 +1,1 @@
+require('./customer-report-react')

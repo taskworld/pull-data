@@ -1,5 +1,7 @@
 'use strict'
 
+require('dotenv').load()
+
 const P = require('bluebird')
 const Fs = require('fs')
 const Path = require('path')
@@ -25,7 +27,7 @@ function renderTaskworldReport (twCsvFile, adwordsCsvFile, deviceCsvFile) {
     Util.readCsv(adwordsCsvFile),
     Util.readCsv(deviceCsvFile)
   ])
-  .spread((twRows, adwordsRows, deviceRows) => {
+  .spread(async (twRows, adwordsRows, deviceRows) => {
     const adMap = adwordsRows.reduce((acc, x) => {
       acc[x['ga:eventLabel']] = x
       return acc
@@ -81,9 +83,15 @@ function renderTaskworldReport (twCsvFile, adwordsCsvFile, deviceCsvFile) {
         Moment().diff(Moment(x.subscriptionStartDate), 'days')
       )
       x.isActive = isActiveCustomer(x)
+
+      x.editableField = {
+        signupSource: !x.signupSource,
+        channel: !x.channel,
+        country: !x.country
+      }
     })
 
-    let html = Fs.readFileSync(Path.join(__dirname, 'layout.html'), 'utf8')
+    let html = Fs.readFileSync(Path.join(__dirname, 'layout-customer.html'), 'utf8')
 
     let startMonth = Moment().subtract(MAX_MONTHS, 'months')
     if (startMonth.isBefore(Moment('2016-05-01'))) {
@@ -108,18 +116,29 @@ function renderTaskworldReport (twCsvFile, adwordsCsvFile, deviceCsvFile) {
     getAverageLifetimeValue(report)
 
     // DUMP !
-    console.log(JSON.stringify(report.report.monthly, null, 2))
+    // console.log(JSON.stringify(report.report.monthly, null, 2))
 
-    html = html
-    .replace('{{DATA}}', JSON.stringify(report, null, 2))
-    .replace('{{SCRIPT}}', Fs.readFileSync(Path.join(__dirname, 'customer-report-react.js'), 'utf8'))
+    html = html.replace('{{DATA}}', JSON.stringify(report, null, 2))
+
+    if (process.env.NODE_ENV === 'dev') {
+      html = html
+      .replace('{{FIREBASESCRIPT}}', '')
+      .replace('{{SCRIPT}}', '')
+      .replace('{{DEVSCRIPT}}', '<script src="http://localhost:8080/app.bundle.js"></script>')
+    } else {
+      const content = Fs.readFileSync(Path.join(__dirname, '../bin/app.bundle.js'), 'utf8')
+      html = html
+      .replace('{{FIREBASESCRIPT}}', '')
+      .replace('{{DEVSCRIPT}}', '')
+      .replace('{{SCRIPT}}', () => content)
+    }
 
     const reportFile = '/tmp/customer-report.html'
     Fs.writeFileSync(reportFile, html)
-
     if (process.argv[2] === 'upload') {
       S3.uploadToS3(S3.createItem(reportFile))
       .then(res => {
+        console.log(res)
         const expiresMatch = /Expires=(\d+)/.exec(res.signedUrl)
         const expiresDate = new Date(parseInt(expiresMatch[1], 10) * 1000)
         console.log('res=', res)

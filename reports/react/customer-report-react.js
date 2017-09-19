@@ -1,10 +1,42 @@
 /*
   global
-  reportData, moment, React, ReactDOM, classNames
+  reportData,
 */
 'use strict'
+import React from 'react'
+import moment from 'moment'
+import { ReportRow } from './ReportRow.react'
+import LicensesTableRow from './LicensesTableRow.react'
+import { prepareData } from '../services/customerAdditionalDataService'
+import ReactDOM from 'react-dom'
 
 class App extends React.Component {
+  constructor (props) {
+    super(props)
+    this.state = {
+      data: props.data,
+      rows: props.data.rows,
+      dataFetched: false
+    }
+  }
+
+  async componentDidMount () {
+    await prepareData()
+    this.setState({ dataFetched: true })
+  }
+
+  renderTableRows (report, opts) {
+    if (!this.state.dataFetched) return null
+    return report.map((x, i) => (
+      <ReportRow
+        key={i}
+        row={x}
+        remaining={report.length - i}
+        opts={opts}
+      />
+    ))
+  }
+
   renderTable (title, report, opts = { }) {
     return (
       <div>
@@ -29,14 +61,7 @@ class App extends React.Component {
             </tr>
           </thead>
           <tbody>
-            {report.map((x, i) => (
-              <ReportRow
-                key={i}
-                row={x}
-                remaining={report.length - i}
-                opts={opts}
-              />
-            ))}
+            {this.renderTableRows(report, opts)}
           </tbody>
         </table>
       </div>
@@ -209,17 +234,7 @@ class App extends React.Component {
                 </td>
               ))}
             </tr>
-
-            <tr>
-              <td>Licenses by Country:</td>
-              {report.monthly.map((x, i) => (
-                <td className='percentage' key={i}>
-                  {x.countries.map(y => (
-                    <div className='details'>{y[0]}: {y[1]}</div>
-                  ))}
-                </td>
-              ))}
-            </tr>
+            <LicensesTableRow report={report} />
           </tbody>
         </table>
       </div>
@@ -227,9 +242,9 @@ class App extends React.Component {
   }
 
   render () {
-    const { data } = this.props
+    const { data } = this.state
 
-    const churnedCustomersReport = data.rows
+    const churnedCustomersReport = this.state.rows
     .filter(x => !x.isActive)
     .map(x => {
       const copy = { ...x }
@@ -249,7 +264,7 @@ class App extends React.Component {
 
           {this.renderTable(
             'Active Customers',
-            data.rows.filter(x => x.isActive)
+            this.state.rows.filter(x => x.isActive)
           )}
 
           <br />
@@ -267,59 +282,6 @@ class App extends React.Component {
 
 App.propTypes = {
   data: React.PropTypes.object.isRequired
-}
-
-const ReportRow = ({ row, remaining, opts }) => {
-  const isWithinToday = moment(row.subscriptionStartDate).isAfter(
-    moment().startOf('day')
-  )
-  const isWithin48Hours = moment(row.subscriptionStartDate).isAfter(
-    moment().subtract(2, 'days').startOf('day')
-  )
-
-  const newCls = classNames({
-    'nowrap': true,
-    'row-green': isWithinToday,
-    'row-amber': !isWithinToday && isWithin48Hours,
-    'row-red': !row.isActive
-  })
-
-  return (
-    <tr>
-      <td>{remaining}</td>
-      <td>{row.workspaceDisplayName}</td>
-      <td className='nowrap'>{moment(row.workspaceCreatedDate).format('YYYY-MM-DD')}</td>
-      <td>
-        <div>{row.ownerName}</div>
-        <div className='details-big'>{row.ownerEmail}</div>
-      </td>
-      <td>
-        <div>{row.subscription}</div>
-        <div className='details'>{row.membershipDays} days</div>
-      </td>
-      <td className={newCls}>
-        {row.secondaryDate
-          ? row.secondaryDate.format('YYYY-MM-DD')
-          : moment(row.subscriptionStartDate).format('YYYY-MM-DD')
-        }
-        <div className='details'>{moment(row.subscriptionEndDate).format('YYYY-MM-DD')}</div>
-      </td>
-      <td>{row.paymentType}</td>
-      <td className={newCls}>
-        <div>{row.licenses}</div>
-        <div className='details'>${(Number(row.amount || 0)).toLocaleString()}</div>
-      </td>
-      <td className={newCls}>{row.billingCycle}</td>
-      <td>{row.subscriptionId ? 'BrainTree' : 'Invoice'}</td>
-      <td>{row.signupSource}</td>
-      <td>
-        <div>{row.channel}</div>
-        <div className='details'>{row.device}</div>
-      </td>
-      <td>{row.country}</td>
-      <td><div className='details'>{row.workspaceId}</div></td>
-    </tr>
-  )
 }
 
 ReactDOM.render(
