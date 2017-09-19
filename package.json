@@ -39,9 +39,7 @@
     "react-dom": "^15.6.1",
     "sendgrid": "^4.5.0",
     "tcomb": "^3.2.13",
-    "updeep": "^1.0.0"
-  },
-  "devDependencies": {
+    "updeep": "^1.0.0",
     "babel-core": "^6.26.0",
     "babel-loader": "^7.1.2",
     "babel-plugin-transform-class-properties": "^6.24.1",
