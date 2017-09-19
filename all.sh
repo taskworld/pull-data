@@ -16,7 +16,7 @@ echo "Preprocessing .."
 node reports/combine-marketing-performance-data.js
 
 echo "Creating customers report .."
-node reports/create-customers-report.js upload
+npm run prod-customers
 
 echo "Creating marketing performance report .."
 node reports/create-marketing-performance-report.js upload
