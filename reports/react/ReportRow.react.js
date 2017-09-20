@@ -117,7 +117,6 @@ export class ReportRow extends React.Component {
       [field]: val,
       month: moment(this.state.row.workspaceCreatedDate).month()
     }
-    console.log(rowData)
     await writeUserData(this.state.row.workspaceId, rowData)
     this.setState({
       editingField: defaultEditing

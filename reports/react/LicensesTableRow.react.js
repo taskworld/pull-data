@@ -45,7 +45,7 @@ function getMonthlyData (monthly, userData) {
         return {
           name: countryName, value: valueFromReport + valueFromUserData
         }
-      }),
+      }).sort((a, b) => b.value > a.value ? 1 : -1),
       month: thisMonth
     }
     acc.push(data)
@@ -71,7 +71,6 @@ export default class LicensesTableRow extends React.Component {
   }
 
   render () {
-    console.log(this.state.userData)
     const monthData = getMonthlyData(this.state.report.monthly, this.state.userData)
     return (
       <tr>
