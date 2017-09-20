@@ -35,11 +35,13 @@ class EditableField extends React.Component {
   renderNormalState () {
     const style = {
       cursor: 'pointer',
-      textDecoration: 'underline'
+      textDecoration: 'underline',
+      minWidth: '100px',
+      minHeight: '24px',
     }
     return (
-      <div style={style} onClick={this.props.onStartEditRow}>
-        {this.props.value || 'Click to edit'}
+      <div style={style} onClick={this.props.onStartEditRow} className='clickable' >
+        {this.props.value || ''}
       </div>
     )
   }
@@ -47,13 +49,11 @@ class EditableField extends React.Component {
   render () {
     if (this.props.nonEditable) {
       return (
-        <td>{this.props.value}</td>
+        <div>{this.props.value}</div>
       )
     }
     return (
-      <td>
-        {this.props.editting ? this.renderEditingState() : this.renderNormalState() }
-      </td>
+      this.props.editting ? this.renderEditingState() : this.renderNormalState()
     )
   }
 }
@@ -150,7 +150,6 @@ export class ReportRow extends React.Component {
       'row-amber': !isWithinToday && isWithin48Hours,
       'row-red': !row.isActive
     })
-
     return (
       <tr>
         <td>{remaining}</td>
@@ -178,26 +177,37 @@ export class ReportRow extends React.Component {
         </td>
         <td className={newCls}>{row.billingCycle}</td>
         <td>{row.subscriptionId ? 'BrainTree' : 'Invoice'}</td>
-        <EditableField
-          value={row.signupSource}
-          editting={this.state.editingField.signupSource}
-          nonEditable={!row.editableField.signupSource}
-          onStartEditRow={this.onStartEditRow('signupSource')}
-          onChange={(e) => this.onEdit('signupSource', e.target.value)}
-          onDoneEditRow={(val) => this.onDoneEditRow('signupSource', val)}
-        />
         <td>
-          <div>{row.channel}</div>
+          <EditableField
+            value={row.signupSource}
+            editting={this.state.editingField.signupSource}
+            nonEditable={!row.editableField.signupSource}
+            onStartEditRow={this.onStartEditRow('signupSource')}
+            onChange={(e) => this.onEdit('signupSource', e.target.value)}
+            onDoneEditRow={(val) => this.onDoneEditRow('signupSource', val)}
+          />
+        </td>
+        <td>
+          <EditableField
+            value={row.channel}
+            nonEditable={!row.editableField.channel}
+            editting={this.state.editingField.channel}
+            onStartEditRow={this.onStartEditRow('channel')}
+            onChange={(e) => this.onEdit('channel', e.target.value)}
+            onDoneEditRow={(val) => this.onDoneEditRow('channel', val)}
+          />
           <div className='details'>{row.device}</div>
         </td>
-        <EditableField
-          value={row.country}
-          nonEditable={!row.editableField.country}
-          editting={this.state.editingField.country}
-          onStartEditRow={this.onStartEditRow('country')}
-          onChange={(e) => this.onEdit('country', e.target.value)}
-          onDoneEditRow={(val) => this.onDoneEditRow('country', val)}
-        />
+        <td>
+          <EditableField
+            value={row.country}
+            nonEditable={!row.editableField.country}
+            editting={this.state.editingField.country}
+            onStartEditRow={this.onStartEditRow('country')}
+            onChange={(e) => this.onEdit('country', e.target.value)}
+            onDoneEditRow={(val) => this.onDoneEditRow('country', val)}
+          />
+        </td>
         <td><div className='details'>{row.workspaceId}</div></td>
       </tr>
     )

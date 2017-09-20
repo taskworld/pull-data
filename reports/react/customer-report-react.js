@@ -26,7 +26,6 @@ class App extends React.Component {
   }
 
   renderTableRows (report, opts) {
-    if (!this.state.dataFetched) return null
     return report.map((x, i) => (
       <ReportRow
         key={i}
@@ -38,6 +37,13 @@ class App extends React.Component {
   }
 
   renderTable (title, report, opts = { }) {
+    if (!this.state.dataFetched) {
+      return (
+        <div>
+          <h1>{title} <i className='fa fa-circle-o-notch fa-spin' style={{ fontSize: '24px' }} /></h1>
+        </div>
+      )
+    }
     return (
       <div>
         <h1>{title}</h1>
