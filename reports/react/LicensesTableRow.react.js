@@ -17,11 +17,12 @@ function getMonthlyData (monthly, userData) {
     if (!thisMonthData[userRow.country]) {
       thisMonthData[userRow.country] = 0
     }
-    thisMonthData[userRow.country] += 1
+    thisMonthData[userRow.country] += (userRow.licenses || 1)
     return acc
   }, { })
+
   const mergedData = monthly.reduce((acc, row, i) => {
-    const thisMonth = moment(row.endOfLastPeriod).month()
+    const thisMonth = moment(row.endOfLastPeriod).month() + 1
     const monthDataFromUser = dataFromUser[thisMonth] || { }
     const valueFromUserReportPerCountry = row.countries.reduce((acc, y) => {
       const name = y[0]
@@ -70,6 +71,7 @@ export default class LicensesTableRow extends React.Component {
   }
 
   render () {
+    console.log(this.state.userData)
     const monthData = getMonthlyData(this.state.report.monthly, this.state.userData)
     return (
       <tr>

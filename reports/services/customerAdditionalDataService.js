@@ -15,12 +15,13 @@ firebase.auth().signInAnonymously()
 
 let usersData = null
 
-export function writeUserData (spaceId, { month, country, channel, signupSource }) {
+export function writeUserData (spaceId, { month, country, channel, signupSource, licenses }) {
   firebase.database().ref('workspaces/' + spaceId).set({
     month,
     country,
     channel,
-    signupSource
+    signupSource,
+    licenses: licenses || 1
   })
 }
 
