@@ -13,29 +13,36 @@ function getMonthlyData (monthly, userData) {
       acc[month] = { }
     }
     const thisMonthData = acc[month]
+    if (!userRow.country) return acc
     if (!thisMonthData[userRow.country]) {
       thisMonthData[userRow.country] = 0
     }
     thisMonthData[userRow.country] += 1
     return acc
   }, { })
-  const dataFromReport = monthly.reduce((acc, row, i) => {
+  const mergedData = monthly.reduce((acc, row, i) => {
     const thisMonth = moment(row.endOfLastPeriod).month()
-    let thisMonthRemoveCountryCount = 0
+    const monthDataFromUser = dataFromUser[thisMonth] || { }
+    const valueFromUserReportPerCountry = row.countries.reduce((acc, y) => {
+      const name = y[0]
+      const value = y[1]
+      acc[name] = value
+      return acc
+    }, { })
+    const allCountries = Array.from(new Set(row.countries.map(c => c[0]).concat(Object.keys(monthDataFromUser))))
+    const customInputCountryCount = Object.keys(monthDataFromUser).reduce((acc, key) => {
+      return acc + monthDataFromUser[key]
+    }, 0)
     const data = {
       key: i,
-      countries: row.countries.map(y => {
-        const name = y[0]
-        const countReport = y[1]
-        if (name === 'Other') {
-          return { name, value: countReport - thisMonthRemoveCountryCount }
+      countries: allCountries.map(countryName => {
+        const valueFromReport = valueFromUserReportPerCountry[countryName] || 0
+        if (countryName === 'Other') {
+          return { name: countryName, value: valueFromReport - customInputCountryCount }
         }
-        const countUserData = dataFromUser[thisMonth] || { }
-        const countUserDataForThisCountry = countUserData[name] || 0
-        const value = countReport + countUserDataForThisCountry
-        thisMonthRemoveCountryCount += countUserDataForThisCountry
+        const valueFromUserData = monthDataFromUser[countryName] || 0
         return {
-          name, value
+          name: countryName, value: valueFromReport + valueFromUserData
         }
       }),
       month: thisMonth
@@ -43,7 +50,7 @@ function getMonthlyData (monthly, userData) {
     acc.push(data)
     return acc
   }, [])
-  return dataFromReport
+  return mergedData
 }
 
 export default class LicensesTableRow extends React.Component {
