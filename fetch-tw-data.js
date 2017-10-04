@@ -65,7 +65,7 @@ function isBlacklistedEmailAddress (email) {
   return _blacklistedEmailsRegexp.test(email)
 }
 
-function * fetchReport (db, opts) {
+async function fetchReport (db, opts) {
   const { serverName } = opts
   const dateRange =
   opts.startDate.format('YYYY-MM-DD') + '-' +
@@ -74,7 +74,7 @@ function * fetchReport (db, opts) {
   console.log(`Exporting Taskworld data for period ${dateRange} ..`)
 
   // Fetch all memberships.
-  const memberships = yield db.collection('memberships')
+  const memberships = await db.collection('memberships')
   .find({
     membership_type: { $ne: 'free_trial' },
     start_date: {
@@ -94,7 +94,7 @@ function * fetchReport (db, opts) {
   }, { })
 
   // Fetch all related workspaces.
-  const workspaces = yield db.collection('workspaces')
+  const workspaces = await db.collection('workspaces')
   .find({ membership_id: { $in: membershipIds } })
   .sort({ _id: -1 })
   .limit(MAX_DOCS)
@@ -114,7 +114,7 @@ function * fetchReport (db, opts) {
   .map((x) => Mongo.getObjectId(x))
 
   // Fetch all related users.
-  const users = yield db.collection('users')
+  const users = await db.collection('users')
   .find({
     _id: { $in: memberIds },
     email: { $ne: 'system@taskworld.com' }
