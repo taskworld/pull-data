@@ -51,10 +51,10 @@ function isBlacklistedEmailAddress (email) {
   return _blacklistedEmailsRegexp.test(email)
 }
 
-function * exportMemberships (db, opts) {
+function * fetchReport (db, opts) {
   const dateRange =
-    opts.startDate.format('YYYY-MM-DD') + '-' +
-    opts.endDate.format('YYYY-MM-DD')
+  opts.startDate.format('YYYY-MM-DD') + '-' +
+  opts.endDate.format('YYYY-MM-DD')
 
   console.log(`Exporting Taskworld data for period ${dateRange} ..`)
 
@@ -152,16 +152,21 @@ function * exportMemberships (db, opts) {
     return false
   })
   .filter((x) => x)
+  return report
+}
 
+function * exportMemberships (db, opts) {
+  const report = fetchReport(db, opts)
   report.sort((a, b) => {
     return a.subscriptionStartDate > b.subscriptionStartDate ? -1 : 1
   })
+  yield writeReportToCsv(report)
+}
 
-  // console.log(userMap)
-  // console.log(report)
+async function writeReportToCsv (report) {
   const reportFileName = `/tmp/tw-data.csv`
   console.log(`Creating ${reportFileName} with ${report.length} rows ..`)
 
   // Dump to CSV.
-  yield Util.writeCsv(report, reportFileName)
+  await Util.writeCsv(report, reportFileName)
 }
