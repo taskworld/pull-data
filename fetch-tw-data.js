@@ -5,9 +5,16 @@ const Moment = require('moment')
 const Mongo = require('./mongodb')
 const Util = require('./util')
 const Fs = require('fs')
+const Assert = require('assert')
 P.promisifyAll(Fs)
 
 const MAX_DOCS = 10000
+
+Assert(process.env.PULLDATA_MONGO_DB_URLS, 'Missing env `PULLDATA_MONGO_DB_URLS`')
+Assert(process.env.PULLDATA_SERVERS_LIST, 'Missing env `PULLDATA_SERVERS_LIST`')
+
+const dbUrls = process.env.PULLDATA_MONGO_DB_URLS.split(',')
+const servers = process.env.PULLDATA_SERVERS_LIST.split(',')
 
 const Argv = require('minimist')(process.argv.slice(2))
 if (Argv.from && Argv.to) {
@@ -27,17 +34,24 @@ function run (args) {
   )
 }
 
-function pullDataFromMongoDb (startDate, endDate) {
+async function pullDataFromMongoDb (startDate, endDate) {
   console.log(`
   Pulling data for period:
   Start Date: ${startDate.format()}
   End Date:   ${endDate.format()}
   `)
-
-  return Mongo.query(exportMemberships, { startDate, endDate })
-  // .then(() => Mongo.query(exportTransactionLog, { startDate, endDate }))
-  .then(Mongo.close)
-  .catch((err) => console.error(err))
+  const serversList = dbUrls.map((url, index) => (
+    { dbUrl: url, serverName: servers[index] || 'Unknown server?' }
+  ))
+  const reports = await P.map(serversList, async server => {
+    const db = await Mongo.connect(server.dbUrl)
+    return fetchReport(db, { startDate, endDate, serverName: server.serverName })
+  })
+  const allReports = reports.reduce((acc, val) => [ ...acc, ...val ], [ ])
+  allReports.sort((a, b) => {
+    return a.subscriptionStartDate > b.subscriptionStartDate ? -1 : 1
+  })
+  await writeReportToCsv(allReports)
 }
 
 const _blacklistedEmails = [
@@ -52,6 +66,7 @@ function isBlacklistedEmailAddress (email) {
 }
 
 function * fetchReport (db, opts) {
+  const { serverName } = opts
   const dateRange =
   opts.startDate.format('YYYY-MM-DD') + '-' +
   opts.endDate.format('YYYY-MM-DD')
@@ -146,21 +161,14 @@ function * fetchReport (db, opts) {
         amount: m.cycle_charges.normal,
         upgraded: m.cycle_charges.upgraded,
         refunded: m.cycle_charges.refunded,
-        currentPrice: m.price
+        currentPrice: m.price,
+        serverName
       }
     }
     return false
   })
   .filter((x) => x)
   return report
-}
-
-function * exportMemberships (db, opts) {
-  const report = fetchReport(db, opts)
-  report.sort((a, b) => {
-    return a.subscriptionStartDate > b.subscriptionStartDate ? -1 : 1
-  })
-  yield writeReportToCsv(report)
 }
 
 async function writeReportToCsv (report) {

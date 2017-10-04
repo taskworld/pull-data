@@ -9,6 +9,7 @@ const ObjectID = require('mongodb').ObjectID
 Assert(process.env.PULLDATA_MONGO_DB_URL, 'Missing env `PULLDATA_MONGO_DB_URL`')
 
 let _db
+
 function query (func, args) {
   if (_db) {
     return P.coroutine(func)(_db, args)
