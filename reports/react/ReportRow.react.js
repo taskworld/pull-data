@@ -208,6 +208,7 @@ export class ReportRow extends React.Component {
           />
         </td>
         <td><div className='details'>{row.workspaceId}</div></td>
+        <td><div className='details'>{row.serverName}</div></td>
       </tr>
     )
   }

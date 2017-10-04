@@ -64,6 +64,7 @@ class App extends React.Component {
               <th>Channel</th>
               <th>Country</th>
               <th>Workspace ID</th>
+              <th>Server</th>
             </tr>
           </thead>
           <tbody>
