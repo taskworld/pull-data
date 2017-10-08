@@ -10,7 +10,7 @@ P.promisifyAll(Fs)
 
 const MAX_DOCS = 10000
 
-Assert(process.env.PULLDATA_MONGODB_URLS, 'Missing env `PULLDATA_MONGO_DB_URLS`')
+Assert(process.env.PULLDATA_MONGO_DB_URLS, 'Missing env `PULLDATA_MONGO_DB_URLS`')
 Assert(process.env.PULLDATA_SERVERS_LIST, 'Missing env `PULLDATA_SERVERS_LIST`')
 
 const dbUrls = process.env.PULLDATA_MONGO_DB_URLS.split(';')
