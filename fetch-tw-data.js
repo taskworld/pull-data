@@ -178,4 +178,5 @@ async function writeReportToCsv (report) {
   // Dump to CSV.
   await Util.writeCsv(report, reportFileName)
   console.log('Done')
+  process.exit(0)
 }
