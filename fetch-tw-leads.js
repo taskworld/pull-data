@@ -8,7 +8,7 @@ const Fs = require('fs')
 const Sendgrid = require('./lib/sendgrid')
 const S3 = require('./lib/s3')
 
-const { serverLists } = require('./serverlist')
+const { serversList } = require('./serverlist')
 
 P.promisifyAll(Fs)
 const MAX_DOCS = 50000
@@ -77,7 +77,7 @@ function * fetchLeads ({ country, from, to, send, upload }) {
   Membership range: ${startDate.format()} - ${endDate.format()}
   `)
 
-  const reports = yield P.mapSeries(serverLists, server => fetchFromDbUrl(server.dbUrl, {
+  const reports = yield P.mapSeries(serversList, server => fetchFromDbUrl(server.dbUrl, {
     countries,
     startDate,
     endDate,
