@@ -62,7 +62,8 @@ async function fetchFromDbUrl (dbUrl, {
   return exportLeadsForDb(db, {
     countries,
     startDate,
-    endDate
+    endDate,
+    server
   })
 }
 
