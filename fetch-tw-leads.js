@@ -15,6 +15,8 @@ const tzToCountry = require('moment-timezone/data/meta/latest.json')
 // console.log(tzToCountry.zones['Asia/Tokyo'].countries)
 P.coroutine(run)()
 
+const dbUrls = process.env.PULLDATA_MONGO_DB_URLS.split(';')
+
 function * run () {
   const args = require('minimist')(process.argv.slice(2))
 
@@ -60,17 +62,22 @@ function * fetchLeads ({ country, from, to, send, upload }) {
   Membership range: ${startDate.format()} - ${endDate.format()}
   `)
 
-  const report = yield dbRun(exportLeads, {
-    countries,
-    startDate,
-    endDate
+  const reports = yield P.mapSeries(dbUrls, async dbUrl => {
+    const db = await Mongo.connect(dbUrl)
+    console.log(`Fetch leads from db: ${dbUrl}`)
+    return exportLeadsForDb(db, {
+      countries,
+      startDate,
+      endDate
+    })
   })
+  const allReports = reports.reduce((acc, val) => [ ...acc, ...val ], [ ])
 
   const reportFileName = `/tmp/tw-leads.csv`
-  console.log(`Creating ${reportFileName} with ${report.length} rows ..`)
+  console.log(`Creating ${reportFileName} with ${allReports.length} rows ..`)
 
   // Dump to CSV.
-  yield Util.writeCsv(report, reportFileName)
+  yield Util.writeCsv(allReports, reportFileName)
 
   if (send) {
     yield * sendLeads(reportFileName)
@@ -84,7 +91,7 @@ function * fetchLeads ({ country, from, to, send, upload }) {
   console.log('Done.')
 }
 
-function * exportLeads (db, opts) {
+function * exportLeadsForDb (db, opts) {
   // Fetch all trial memberships.
   const memberships = yield db.collection('memberships')
   .find({
@@ -219,10 +226,4 @@ function * exportLeads (db, opts) {
   })
 
   return report
-}
-
-function dbRun (func, args) {
-  return Mongo.query(func, args)
-  .catch(err => console.error(err))
-  .finally(Mongo.close)
 }
