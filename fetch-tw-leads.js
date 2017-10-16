@@ -138,7 +138,10 @@ async function exportLeadsForDb (db, opts) {
     admins: 1,
     members: 1,
     created: 1,
-    membership_id: 1
+    membership_id: 1,
+    country: 1,
+    industry: 1,
+    company_size: 1
   })
   .sort({ _id: -1 })
   .limit(MAX_DOCS)
@@ -172,7 +175,8 @@ async function exportLeadsForDb (db, opts) {
     department: 1,
     language: 1,
     address: 1,
-    date_of_birth: 1
+    date_of_birth: 1,
+
   })
   .sort({ _id: -1 })
   .toArray()
@@ -221,6 +225,9 @@ async function exportLeadsForDb (db, opts) {
         subscription: m.membership_type,
         subscriptionId: m.subscription_id,
         membershipStartDate: Moment(m.start_date).format(),
+        ownerSignupCountry: owner.country,
+        ownerSignupCompanySize: owner.company_size,
+        ownerSignupIndustry: owner.industry,
         server: opts.server
       }
     }
