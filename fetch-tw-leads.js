@@ -62,7 +62,7 @@ function * fetchLeads ({ country, from, to, send, upload }) {
   Membership range: ${startDate.format()} - ${endDate.format()}
   `)
 
-  const reports = yield P.mapSeries(dbUrls, async dbUrl => {
+  const reports = yield P.mapSeries(dbUrls, async (dbUrl) => {
     const db = await Mongo.connect(dbUrl)
     console.log(`Fetch leads from db: ${dbUrl}`)
     return exportLeadsForDb(db, {
