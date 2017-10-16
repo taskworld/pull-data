@@ -8,14 +8,14 @@ const Fs = require('fs')
 const Sendgrid = require('./lib/sendgrid')
 const S3 = require('./lib/s3')
 
+const dbUrls = process.env.PULLDATA_MONGO_DB_URLS.split(';')
+
 P.promisifyAll(Fs)
 const MAX_DOCS = 50000
 const tzToCountry = require('moment-timezone/data/meta/latest.json')
 
 // console.log(tzToCountry.zones['Asia/Tokyo'].countries)
 P.coroutine(run)()
-
-const dbUrls = process.env.PULLDATA_MONGO_DB_URLS.split(';')
 
 function * run () {
   const args = require('minimist')(process.argv.slice(2))
