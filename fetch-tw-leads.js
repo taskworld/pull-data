@@ -138,10 +138,7 @@ async function exportLeadsForDb (db, opts) {
     admins: 1,
     members: 1,
     created: 1,
-    membership_id: 1,
-    country: 1,
-    industry: 1,
-    company_size: 1
+    membership_id: 1
   })
   .sort({ _id: -1 })
   .limit(MAX_DOCS)
@@ -176,7 +173,9 @@ async function exportLeadsForDb (db, opts) {
     language: 1,
     address: 1,
     date_of_birth: 1,
-
+    country: 1,
+    industry: 1,
+    company_size: 1
   })
   .sort({ _id: -1 })
   .toArray()
