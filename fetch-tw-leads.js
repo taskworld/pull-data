@@ -51,6 +51,20 @@ function * sendLeads (csvFile) {
   }
 }
 
+async function fetchFromDbUrl (dbUrl, {
+  countries,
+  startDate,
+  endDate
+}) {
+  const db = await Mongo.connect(dbUrl)
+  console.log(`Fetch leads from db: ${dbUrl}`)
+  return exportLeadsForDb(db, {
+    countries,
+    startDate,
+    endDate
+  })
+}
+
 function * fetchLeads ({ country, from, to, send, upload }) {
   const countries = (country || '').trim().split(/\s*,\s*/)
   const startDate = from ? Moment(from, 'YYYY-MM-DD') : Moment().subtract(4, 'day').startOf('day')
@@ -62,15 +76,12 @@ function * fetchLeads ({ country, from, to, send, upload }) {
   Membership range: ${startDate.format()} - ${endDate.format()}
   `)
 
-  const reports = yield P.mapSeries(dbUrls, async (dbUrl) => {
-    const db = await Mongo.connect(dbUrl)
-    console.log(`Fetch leads from db: ${dbUrl}`)
-    return exportLeadsForDb(db, {
-      countries,
-      startDate,
-      endDate
-    })
-  })
+  const reports = yield P.mapSeries(dbUrls, dbUrl => fetchFromDbUrl(dbUrl, {
+    countries,
+    startDate,
+    endDate
+  }))
+
   const allReports = reports.reduce((acc, val) => [ ...acc, ...val ], [ ])
 
   const reportFileName = `/tmp/tw-leads.csv`
