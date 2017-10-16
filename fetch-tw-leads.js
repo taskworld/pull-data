@@ -8,7 +8,7 @@ const Fs = require('fs')
 const Sendgrid = require('./lib/sendgrid')
 const S3 = require('./lib/s3')
 
-const dbUrls = process.env.PULLDATA_MONGO_DB_URLS.split(';')
+const { serverLists } = require('./serverlist')
 
 P.promisifyAll(Fs)
 const MAX_DOCS = 50000
@@ -54,10 +54,11 @@ function * sendLeads (csvFile) {
 async function fetchFromDbUrl (dbUrl, {
   countries,
   startDate,
-  endDate
+  endDate,
+  server
 }) {
   const db = await Mongo.connect(dbUrl)
-  console.log(`Fetch leads from db: ${dbUrl}`)
+  console.log(`Fetch leads from server: ${server}`)
   return exportLeadsForDb(db, {
     countries,
     startDate,
@@ -76,10 +77,11 @@ function * fetchLeads ({ country, from, to, send, upload }) {
   Membership range: ${startDate.format()} - ${endDate.format()}
   `)
 
-  const reports = yield P.mapSeries(dbUrls, dbUrl => fetchFromDbUrl(dbUrl, {
+  const reports = yield P.mapSeries(serverLists, server => fetchFromDbUrl(server.dbUrl, {
     countries,
     startDate,
-    endDate
+    endDate,
+    server: server.serverName
   }))
 
   const allReports = reports.reduce((acc, val) => [ ...acc, ...val ], [ ])
@@ -102,16 +104,18 @@ function * fetchLeads ({ country, from, to, send, upload }) {
   console.log('Done.')
 }
 
-function * exportLeadsForDb (db, opts) {
+async function exportLeadsForDb (db, opts) {
   // Fetch all trial memberships.
-  const memberships = yield db.collection('memberships')
-  .find({
+  const query = {
     membership_type: 'free_trial',
     start_date: {
       $gte: opts.startDate.toDate(),
       $lt: opts.endDate.toDate()
     }
-  })
+  }
+
+  const memberships = await db.collection('memberships')
+  .find(query)
   .sort({ _id: -1 })
   .limit(MAX_DOCS)
   .toArray()
@@ -125,7 +129,7 @@ function * exportLeadsForDb (db, opts) {
   }, { })
 
   // Fetch related workspaces.
-  const workspaces = yield db.collection('workspaces')
+  const workspaces = await db.collection('workspaces')
   .find({ membership_id: { $in: membershipIds } })
   .project({
     name: 1,
@@ -153,7 +157,7 @@ function * exportLeadsForDb (db, opts) {
   .map((x) => Mongo.getObjectId(x))
 
   // Fetch related users.
-  const users = yield db.collection('users')
+  const users = await db.collection('users')
   .find({
     _id: { $in: memberIds },
     email: { $ne: 'system@taskworld.com' }
@@ -216,7 +220,8 @@ function * exportLeadsForDb (db, opts) {
         ownerDetails: `Title: ${owner.job_title || ''}, Department: ${owner.department || ''}, Address: ${owner.address || ''}`,
         subscription: m.membership_type,
         subscriptionId: m.subscription_id,
-        membershipStartDate: Moment(m.start_date).format()
+        membershipStartDate: Moment(m.start_date).format(),
+        server: opts.server
       }
     }
     return false

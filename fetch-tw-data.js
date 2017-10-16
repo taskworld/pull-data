@@ -5,16 +5,10 @@ const Moment = require('moment')
 const Mongo = require('./mongodb')
 const Util = require('./util')
 const Fs = require('fs')
-const Assert = require('assert')
+const { serversList } = require('./serverlist')
 P.promisifyAll(Fs)
 
 const MAX_DOCS = 10000
-
-Assert(process.env.PULLDATA_MONGO_DB_URLS, 'Missing env `PULLDATA_MONGO_DB_URLS`')
-Assert(process.env.PULLDATA_SERVERS_LIST, 'Missing env `PULLDATA_SERVERS_LIST`')
-
-const dbUrls = process.env.PULLDATA_MONGO_DB_URLS.split(';')
-const servers = process.env.PULLDATA_SERVERS_LIST.split(';')
 
 const Argv = require('minimist')(process.argv.slice(2))
 if (Argv.from && Argv.to) {
@@ -40,9 +34,7 @@ async function pullDataFromMongoDb (startDate, endDate) {
   Start Date: ${startDate.format()}
   End Date:   ${endDate.format()}
   `)
-  const serversList = dbUrls.map((url, index) => (
-    { dbUrl: url, serverName: servers[index] || 'Unknown server?' }
-  ))
+
   const reports = await P.mapSeries(serversList, async server => {
     const db = await Mongo.connect(server.dbUrl)
     return fetchReport(db, { startDate, endDate, serverName: server.serverName })
