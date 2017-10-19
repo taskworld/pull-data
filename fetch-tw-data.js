@@ -112,7 +112,7 @@ async function fetchReport (db, opts) {
     _id: { $in: memberIds },
     email: { $ne: 'system@taskworld.com' }
   })
-  .project({ email: 1, time_zone: 1, last_name: 1, first_name: 1 })
+  .project({ email: 1, time_zone: 1, last_name: 1, first_name: 1, metadata: 1, country: 1 })
   .sort({ _id: -1 })
   .toArray()
 
@@ -156,8 +156,9 @@ async function fetchReport (db, opts) {
         refunded: membership.cycle_charges.refunded,
         currentPrice: membership.price,
         serverName,
+        signupCountry: owner.country,
         utmSource: _.get(owner, 'metadata.signupMetadata.utm_source', ''),
-        utmMedium: _.get(owner, 'metadata.signupMetadata.utm_medium', '')
+        utmMedium: _.get(owner, 'metadata.signupMetadata.utm_medium', ''),
       }
     }
     return false
