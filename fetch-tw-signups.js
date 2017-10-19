@@ -7,9 +7,11 @@ const Mongo = require('./mongodb')
 const Util = require('./util')
 const Fs = require('fs')
 const { serversList } = require('./serverlist')
+const S3 = require('./lib/s3')
 P.promisifyAll(Fs)
 
 const Argv = require('minimist')(process.argv.slice(2))
+
 if (Argv.from && Argv.to) {
   run(Argv)
 } else {
@@ -20,14 +22,16 @@ if (Argv.from && Argv.to) {
   `)
 }
 
-function run (args) {
-  pullDataFromMongoDb(
+async function run (args) {
+  await pullDataFromMongoDb(
     Moment(args.from),
-    Moment(args.to)
+    Moment(args.to), {
+      upload: args.upload
+    }
   )
 }
 
-async function pullDataFromMongoDb (startDate, endDate) {
+async function pullDataFromMongoDb (startDate, endDate, { upload }) {
   console.log(`
   Pulling data for period:
   Start Date: ${startDate.format()}
@@ -42,7 +46,9 @@ async function pullDataFromMongoDb (startDate, endDate) {
   allReports.sort((a, b) => {
     return a.subscriptionStartDate > b.subscriptionStartDate ? -1 : 1
   })
-  await writeReportToCsv(allReports)
+  await writeReportToCsv(allReports, {
+    upload
+  })
 }
 
 const _blacklistedEmails = [
@@ -87,12 +93,17 @@ async function fetchReport (db, opts) {
   return userReport
 }
 
-async function writeReportToCsv (report) {
+async function writeReportToCsv (report, { upload }) {
   const reportFileName = `/tmp/tw-signups.csv`
   console.log(`Creating ${reportFileName} with ${report.length} rows ..`)
 
   // Dump to CSV.
   await Util.writeCsv(report, reportFileName)
+
+  if (upload) {
+    const res = await S3.uploadToS3(S3.createItem(reportFileName, 'tw-signups'))
+    console.log('res=', res)
+  }
   console.log('Done')
   process.exit(0)
 }
