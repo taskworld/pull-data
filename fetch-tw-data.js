@@ -1,6 +1,7 @@
 'use strict'
 
 const P = require('bluebird')
+const _ = require('lodash')
 const Moment = require('moment')
 const Mongo = require('./mongodb')
 const Util = require('./util')
@@ -120,12 +121,12 @@ async function fetchReport (db, opts) {
     return acc
   }, { })
 
-  const report = workspaces.map((x) => {
-    if (x.membership_id) {
-      const m = membershipMap[x.membership_id]
-      const owner = userMap[x.owner_id]
+  const report = workspaces.map((workspace) => {
+    if (workspace.membership_id) {
+      const membership = membershipMap[workspace.membership_id]
+      const owner = userMap[workspace.owner_id]
       if (!owner) {
-        console.error('Unknown workspace owner:', x.owner_id)
+        console.error('Unknown workspace owner:', workspace.owner_id)
         return false
       }
       if (isBlacklistedEmailAddress(owner.email)) {
@@ -133,28 +134,30 @@ async function fetchReport (db, opts) {
         return false
       }
 
-      const workspaceId = x._id.toString()
+      const workspaceId = workspace._id.toString()
 
       return {
         workspaceId: workspaceId,
-        workspaceName: x.name,
-        workspaceDisplayName: x.display_name,
-        workspaceCreatedDate: Moment(x.created).format(),
+        workspaceName: workspace.name,
+        workspaceDisplayName: workspace.display_name,
+        workspaceCreatedDate: Moment(workspace.created).format(),
         ownerName: `${owner.first_name} ${owner.last_name}`,
         ownerEmail: owner.email,
-        subscription: m.membership_type,
-        subscriptionId: m.subscription_id,
-        paymentType: m.payment_account && m.payment_account.payment_type || null,
-        subscriptionStartDate: Moment(m.start_subscription_date || m.start_date).format(),
-        membershipStartDate: Moment(m.start_date).format(),
-        subscriptionEndDate: Moment(m.expiry_date).format(),
-        licenses: m.user_limit,
-        billingCycle: m.billing_cycle_type,
-        amount: m.cycle_charges.normal,
-        upgraded: m.cycle_charges.upgraded,
-        refunded: m.cycle_charges.refunded,
-        currentPrice: m.price,
-        serverName
+        subscription: membership.membership_type,
+        subscriptionId: membership.subscription_id,
+        paymentType: membership.payment_account && membership.payment_account.payment_type || null,
+        subscriptionStartDate: Moment(membership.start_subscription_date || membership.start_date).format(),
+        membershipStartDate: Moment(membership.start_date).format(),
+        subscriptionEndDate: Moment(membership.expiry_date).format(),
+        licenses: membership.user_limit,
+        billingCycle: membership.billing_cycle_type,
+        amount: membership.cycle_charges.normal,
+        upgraded: membership.cycle_charges.upgraded,
+        refunded: membership.cycle_charges.refunded,
+        currentPrice: membership.price,
+        serverName,
+        utmSource: _.get(owner, 'metadata.utm_source', ''),
+        utmMedium: _.get(owner, 'metadata.medium', '')
       }
     }
     return false
