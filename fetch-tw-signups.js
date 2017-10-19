@@ -74,6 +74,9 @@ async function fetchReport (db, opts) {
     created: {
       $gte: opts.startDate.toDate(),
       $lt: opts.endDate.toDate()
+    },
+    'metadata.signupMetadata.utm_source': {
+      $exists: true
     }
   })
   .project({ email: 1, time_zone: 1, last_name: 1, first_name: 1, metadata: 1, created: 1 })
