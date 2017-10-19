@@ -156,8 +156,8 @@ async function fetchReport (db, opts) {
         refunded: membership.cycle_charges.refunded,
         currentPrice: membership.price,
         serverName,
-        utmSource: _.get(owner, 'metadata.utm_source', ''),
-        utmMedium: _.get(owner, 'metadata.medium', '')
+        utmSource: _.get(owner, 'metadata.signupMetadata.utm_source', ''),
+        utmMedium: _.get(owner, 'metadata.signupMetadata.utm_medium', '')
       }
     }
     return false
