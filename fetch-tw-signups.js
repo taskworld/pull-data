@@ -82,6 +82,8 @@ async function fetchReport (db, opts) {
   .sort({ _id: -1 })
   .toArray()
 
+  console.log(`User counts: ${users.length}`)
+
   const userReport = users.filter(user => !isBlacklistedEmailAddress(user)).map(user => ({
     email: user.email,
     utmSource: _.get(user, 'metadata.signupMetadata.utm_source', 'unknown'),
