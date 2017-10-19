@@ -43,9 +43,7 @@ async function pullDataFromMongoDb (startDate, endDate, { upload }) {
     return fetchReport(db, { startDate, endDate, serverName: server.serverName })
   })
   const allReports = reports.reduce((acc, val) => [ ...acc, ...val ], [ ])
-  allReports.sort((a, b) => {
-    return a.subscriptionStartDate > b.subscriptionStartDate ? -1 : 1
-  })
+
   await writeReportToCsv(allReports, {
     upload
   })
