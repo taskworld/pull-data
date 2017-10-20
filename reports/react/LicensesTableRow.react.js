@@ -39,7 +39,10 @@ function getMonthlyData (monthly, userData) {
       countries: allCountries.map(countryName => {
         const valueFromReport = valueFromUserReportPerCountry[countryName] || 0
         if (countryName === 'Other') {
-          return { name: countryName, value: valueFromReport - customInputCountryCount }
+          // Hack: This is obvious hack
+          // We should compare it row by row instead
+          const value = valueFromReport - customInputCountryCount
+          return { name: countryName, value: Math.max(value, 0) }
         }
         const valueFromUserData = monthDataFromUser[countryName] || 0
         return {
