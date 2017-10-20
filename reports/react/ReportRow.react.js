@@ -97,8 +97,8 @@ export class ReportRow extends React.Component {
         country: row.country || manualKeyedData.country
       }
       const newRow = {
-        ..row,
-        ..mixedData
+        ...row,
+        ...mixedData
       }
       this.setState({
         row: newRow
