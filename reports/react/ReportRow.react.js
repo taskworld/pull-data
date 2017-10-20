@@ -87,13 +87,18 @@ export class ReportRow extends React.Component {
   async componentDidMount () {
     const { row } = this.state
     if (!row.country || !row.signupSource || !row.channel) {
-      const dataForRow = await getUsersData(row.workspaceId)
-      if (!dataForRow) {
+      const manualKeyedData = await getUsersData(row.workspaceId)
+      if (!manualKeyedData) {
         return
       }
+      const mixedData = {
+        signupSource: row.signupSource || manualKeyedData.signupSource,
+        channel: row.channel || manualKeyedData.channel,
+        country: row.country || manualKeyedData.country
+      }
       const newRow = {
-        ...dataForRow,
-        ...row,
+        ..row,
+        ..mixedData
       }
       this.setState({
         row: newRow
