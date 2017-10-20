@@ -158,7 +158,8 @@ async function fetchReport (db, opts) {
         serverName,
         signupCountry: owner.country,
         utmSource: _.get(owner, 'metadata.signupMetadata.utm_source', ''),
-        utmMedium: _.get(owner, 'metadata.signupMetadata.utm_medium', '')
+        utmMedium: _.get(owner, 'metadata.signupMetadata.utm_medium', ''),
+        timezone: owner.time_zone
       }
     }
     return false

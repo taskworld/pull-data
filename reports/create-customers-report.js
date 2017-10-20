@@ -7,7 +7,7 @@ const Fs = require('fs')
 const Path = require('path')
 const Moment = require('moment-timezone')
 const S3 = require('../lib/s3')
-const { getCountryName } = require('../lib/isoCountries')
+const { resolveCountryFromUserData } = require('../lib/isoCountries')
 
 const Util = require('../util')
 
@@ -66,6 +66,7 @@ function renderTaskworldReport (twCsvFile, adwordsCsvFile, deviceCsvFile) {
       x.device = ''
 
       const source = adMap[x.ownerEmail]
+
       if (source) {
         if (source['ga:adGroup'] !== '(not set)') {
           x.signupSource = source['ga:adGroup'] + ': ' + source['ga:adMatchedQuery']
@@ -74,9 +75,7 @@ function renderTaskworldReport (twCsvFile, adwordsCsvFile, deviceCsvFile) {
         x.country = source['ga:country']
       }
 
-      // Transform country code for short country
-      const longCountry = getCountryName(x.country)
-      x.country = longCountry || x.country
+      resolveCountryFromUserData(x)
 
       const device = deviceMap[x.ownerEmail]
       if (device) {
