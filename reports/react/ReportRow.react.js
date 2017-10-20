@@ -92,8 +92,8 @@ export class ReportRow extends React.Component {
         return
       }
       const newRow = {
+        ...dataForRow,
         ...row,
-        ...dataForRow
       }
       this.setState({
         row: newRow
