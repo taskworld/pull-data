@@ -23,27 +23,27 @@ if (Argv.from && Argv.to) {
   `)
 }
 
-function run (args) {
-  pullDataFromMongoDb(
-    Moment(args.from),
-    Moment(args.to)
-  )
-  .then(res => {
-    return sendEmail({
+async function run (args) {
+  try {
+    await pullDataFromMongoDb(
+      Moment(args.from),
+      Moment(args.to)
+    )
+    await sendEmail({
       from: 'reports@taskworld.com',
       to: 'chakrit@taskworld.com',
       subject: `Marketing report generate successfully`,
       body: 'Great stuff'
     })
-  })
-  .catch(err => {
+    process.exit(0)
+  } catch (err) {
     return sendEmail({
       from: 'reports@taskworld.com',
       to: 'chakrit@taskworld.com',
       subject: `ERROR!!!: Marketing dashboard cannot reiterate data`,
       body: 'Error:' + err.message
     })
-  })
+  }
 }
 
 async function pullDataFromMongoDb (startDate, endDate) {
@@ -192,5 +192,4 @@ async function writeReportToCsv (report) {
   // Dump to CSV.
   await Util.writeCsv(report, reportFileName)
   console.log('Done')
-  process.exit(0)
 }
