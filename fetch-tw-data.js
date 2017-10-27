@@ -29,12 +29,6 @@ async function run (args) {
       Moment(args.from),
       Moment(args.to)
     )
-    await sendEmail({
-      from: 'reports@taskworld.com',
-      to: 'chakrit@taskworld.com',
-      subject: `Marketing report generate successfully`,
-      body: 'Great stuff'
-    })
     process.exit(0)
   } catch (err) {
     return sendEmail({
