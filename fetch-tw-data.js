@@ -7,6 +7,7 @@ const Mongo = require('./mongodb')
 const Util = require('./util')
 const Fs = require('fs')
 const { serversList } = require('./serverlist')
+const { sendEmail } = require('./lib/sendgrid')
 P.promisifyAll(Fs)
 
 const MAX_DOCS = 10000
@@ -27,6 +28,22 @@ function run (args) {
     Moment(args.from),
     Moment(args.to)
   )
+  .then(res => {
+    return sendEmail({
+      from: 'reports@taskworld.com',
+      to: 'chakrit@taskworld.com',
+      subject: `Marketing report generate successfully`,
+      body: 'Great stuff'
+    })
+  })
+  .catch(err => {
+    return sendEmail({
+      from: 'reports@taskworld.com',
+      to: 'chakrit@taskworld.com',
+      subject: `ERROR!!!: Marketing dashboard cannot reiterate data`,
+      body: 'Error:' + err.message
+    })
+  })
 }
 
 async function pullDataFromMongoDb (startDate, endDate) {
