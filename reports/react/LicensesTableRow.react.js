@@ -2,6 +2,19 @@ import React from 'react'
 import { getAllData } from '../services/customerAdditionalDataService'
 import moment from 'moment'
 
+function mergeSouthKorea (data) {
+  if (!data) return data
+  const newData = { }
+  Object.keys(data).map(country => {
+    const countryName = country.toLowerCase() === 'south korea' ? 'South Korea' : country
+    if (!newData[countryName]) {
+      newData[countryName] = 0
+    }
+    newData[countryName] += data[country]
+  })
+  return newData
+}
+
 function getMonthlyData (monthly, userData) {
   userData = userData || { }
   const dataFromUser = Object.values(userData).reduce((acc, userRow) => {
@@ -23,7 +36,7 @@ function getMonthlyData (monthly, userData) {
 
   const mergedData = monthly.reduce((acc, row, i) => {
     const thisMonth = moment(row.endOfLastPeriod).month() + 1
-    const monthDataFromUser = dataFromUser[thisMonth] || { }
+    const monthDataFromUser = mergeSouthKorea(dataFromUser[thisMonth]) || { }
     const valueFromUserReportPerCountry = row.countries.reduce((acc, y) => {
       const name = y[0]
       const value = y[1]
