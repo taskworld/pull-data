@@ -69,6 +69,11 @@ function isBlacklistedEmailAddress (email) {
   return _blacklistedEmailsRegexp.test(email)
 }
 
+function isDedicatedWorkspace (workspace) {
+  if (!workspace) return false
+  return workspace.name.startsWith('dedicated_server_')
+}
+
 async function fetchReport (db, opts) {
   const { serverName } = opts
   const dateRange =
@@ -120,8 +125,7 @@ async function fetchReport (db, opts) {
   // Fetch all related users.
   const users = await db.collection('users')
   .find({
-    _id: { $in: memberIds },
-    email: { $ne: 'system@taskworld.com' }
+    _id: { $in: memberIds }
   })
   .project({ email: 1, time_zone: 1, last_name: 1, first_name: 1, metadata: 1, country: 1 })
   .sort({ _id: -1 })
@@ -136,6 +140,9 @@ async function fetchReport (db, opts) {
     if (workspace.membership_id) {
       const membership = membershipMap[workspace.membership_id]
       const owner = userMap[workspace.owner_id]
+      if (owner.email === 'system@taskworld.com' && !isDedicatedWorkspace(workspace)) {
+        return false
+      }
       if (!owner) {
         console.error('Unknown workspace owner:', workspace.owner_id)
         return false
