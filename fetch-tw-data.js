@@ -140,11 +140,11 @@ async function fetchReport (db, opts) {
     if (workspace.membership_id) {
       const membership = membershipMap[workspace.membership_id]
       const owner = userMap[workspace.owner_id]
-      if (owner.email === 'system@taskworld.com' && !isDedicatedWorkspace(workspace)) {
-        return false
-      }
       if (!owner) {
         console.error('Unknown workspace owner:', workspace.owner_id)
+        return false
+      }
+      if (owner.email === 'system@taskworld.com' && !isDedicatedWorkspace(workspace)) {
         return false
       }
       if (isBlacklistedEmailAddress(owner.email)) {
