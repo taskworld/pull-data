@@ -174,7 +174,7 @@ async function fetchReport (db, opts) {
         refunded: membership.cycle_charges.refunded,
         currentPrice: membership.price,
         serverName,
-        signupCountry: owner.country || workspace.country,
+        signupCountry: workspace.country || owner.country,
         utmSource: _.get(owner, 'metadata.signupMetadata.utm_source', ''),
         utmMedium: _.get(owner, 'metadata.signupMetadata.utm_medium', ''),
         timezone: owner.time_zone
