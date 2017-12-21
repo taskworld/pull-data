@@ -177,6 +177,7 @@ async function fetchReport (db, opts) {
         signupCountry: workspace.country || owner.country,
         utmSource: _.get(owner, 'metadata.signupMetadata.utm_source', ''),
         utmMedium: _.get(owner, 'metadata.signupMetadata.utm_medium', ''),
+        utmKeyword: _.get(owner, 'metadata.signupMetadata.utm_keyword', ''),
         timezone: owner.time_zone
       }
     }

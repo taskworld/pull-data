@@ -63,6 +63,7 @@ class App extends React.Component {
               <th>Signup Source</th>
               <th>Channel</th>
               <th>Country</th>
+              <th>Keyword</th>
               <th>Workspace ID</th>
               <th>Server</th>
             </tr>

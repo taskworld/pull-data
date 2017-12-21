@@ -64,6 +64,7 @@ function renderTaskworldReport (twCsvFile, adwordsCsvFile, deviceCsvFile) {
       x.signupSource = x.utmSource
       x.channel = ''
       x.device = ''
+      x.adsKeyword = x.utmKeyword
 
       const source = adMap[x.ownerEmail]
 

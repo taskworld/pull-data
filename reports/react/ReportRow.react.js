@@ -212,6 +212,7 @@ export class ReportRow extends React.Component {
             onDoneEditRow={(val) => this.onDoneEditRow('country', val)}
           />
         </td>
+        <td><div className='details'>{row.adsKeyword}</div></td>
         <td><div className='details'>{row.workspaceId}</div></td>
         <td><div className='details'>{row.serverName}</div></td>
       </tr>
