@@ -8,7 +8,7 @@ const Util = require('./util')
 const Fs = require('fs')
 const { serversList } = require('./serverlist')
 const { sendEmail } = require('./lib/sendgrid')
-const { TaskworldService } = require('./TaskworldService/taskworldService')
+const TaskworldService = require('./TaskworldService/taskworldService')
 P.promisifyAll(Fs)
 
 const MAX_DOCS = 10000
