@@ -7,11 +7,12 @@ const _ = require('lodash')
 const { sendEmail } = require('./lib/sendgrid')
 
 async function pullDataFromMongoDb (startDate, endDate) {
-  const users = await P.mapSeries(serversList, async server => {
+  const userChunks = await P.mapSeries(serversList, async server => {
     const db = await Mongo.connect(server.dbUrl)
     console.log(`Fetching users from ${server.dbUrl}...`)
     return TaskworldService.fetchAllUsers(db)
   })
+  const users = _.flatten(userChunks)
   const report = users.map(c => {
     const omitUser = _.omit(c, 'metadata')
     return Object.assign(omitUser, {
