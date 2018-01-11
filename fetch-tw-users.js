@@ -7,12 +7,6 @@ const _ = require('lodash')
 const { sendEmail } = require('./lib/sendgrid')
 
 async function pullDataFromMongoDb (startDate, endDate) {
-  console.log(`
-  Pulling data for period:
-  Start Date: ${startDate.format()}
-  End Date:   ${endDate.format()}
-  `)
-
   const users = await P.mapSeries(serversList, async server => {
     const db = await Mongo.connect(server.dbUrl)
     console.log(`Fetching users from ${server.dbUrl}...`)
