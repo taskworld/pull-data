@@ -8,6 +8,7 @@ const Util = require('./util')
 const Fs = require('fs')
 const { serversList } = require('./serverlist')
 const { sendEmail } = require('./lib/sendgrid')
+const { TaskworldService } = require('./TaskworldService/taskworldService')
 P.promisifyAll(Fs)
 
 const MAX_DOCS = 10000
@@ -123,13 +124,7 @@ async function fetchReport (db, opts) {
   .map((x) => Mongo.getObjectId(x))
 
   // Fetch all related users.
-  const users = await db.collection('users')
-  .find({
-    _id: { $in: memberIds }
-  })
-  .project({ email: 1, time_zone: 1, last_name: 1, first_name: 1, metadata: 1, country: 1 })
-  .sort({ _id: -1 })
-  .toArray()
+  const users = await TaskworldService.fetchUsersByIds(db, memberIds)
 
   const userMap = users.reduce((acc, x) => {
     acc[x._id.toString()] = x
@@ -163,7 +158,7 @@ async function fetchReport (db, opts) {
         ownerEmail: owner.email,
         subscription: membership.membership_type,
         subscriptionId: membership.subscription_id,
-        paymentType: membership.payment_account && membership.payment_account.payment_type || null,
+        paymentType: (membership.payment_account && membership.payment_account.payment_type) || null,
         subscriptionStartDate: Moment(membership.start_subscription_date || membership.start_date).format(),
         membershipStartDate: Moment(membership.start_date).format(),
         subscriptionEndDate: Moment(membership.expiry_date).format(),
@@ -178,7 +173,8 @@ async function fetchReport (db, opts) {
         utmSource: _.get(owner, 'metadata.signupMetadata.utm_source', ''),
         utmMedium: _.get(owner, 'metadata.signupMetadata.utm_medium', ''),
         utmKeyword: _.get(owner, 'metadata.signupMetadata.utm_keyword', ''),
-        timezone: owner.time_zone
+        timezone: owner.time_zone,
+        metadata: _.get(owner, 'metadata', null)
       }
     }
     return false
