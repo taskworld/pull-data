@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo "Fetching Taskworld data .."
-node fetch-tw-data.js --from 2016-06-01 --to 2018-06-01
+node fetch-tw-data.js --from 2016-06-01 --to 2020-06-01
 
 echo "Fetching GA signups data .."
 ./get-adword-signups.sh 2016-06-01
