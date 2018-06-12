@@ -196,8 +196,8 @@ async function exportLeadsForDb (db, opts) {
         console.error('Unknown workspace owner:', x.owner_id)
         return false
       }
-      if (!owner.settings.customer_support) {
-        console.log(`User with email ${owner.email} did not give us consent: ${owner.settings.customer_support}`)
+      if (!owner.settings.customer_support === false) {
+        console.log(`User with email ${owner.email} did not give us consent`)
         return false
       }
 
