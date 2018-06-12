@@ -176,7 +176,8 @@ async function exportLeadsForDb (db, opts) {
     date_of_birth: 1,
     country: 1,
     industry: 1,
-    company_size: 1
+    company_size: 1,
+    'settings.customer_support': 1
   })
   .sort({ _id: -1 })
   .toArray()
@@ -193,6 +194,10 @@ async function exportLeadsForDb (db, opts) {
       const owner = userMap[x.owner_id]
       if (!owner) {
         console.error('Unknown workspace owner:', x.owner_id)
+        return false
+      }
+      if (!owner.settings.customer_support) {
+        console.log(`User with email ${owner.email} did not give us consent: ${owner.settings.customer_support}`)
         return false
       }
 
