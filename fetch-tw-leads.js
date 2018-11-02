@@ -135,7 +135,7 @@ async function exportLeadsForDb (db, opts) {
   .limit(MAX_DOCS)
   .toArray()
   console.log(`Found ${workspaces.length} workspaces.`)
-  const spaceIds = workspaces.mpa((x) => String(x._id))
+  const spaceIds = workspaces.map((x) => String(x._id))
 
   const memberships = await db.collection('memberships')
   .find({
