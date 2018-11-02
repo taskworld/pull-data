@@ -103,6 +103,7 @@ function * fetchLeads ({ country, from, to, send, upload }) {
   }
 
   console.log('Done.')
+  process.exit(0)
 }
 
 async function exportLeadsForDb (db, opts) {
