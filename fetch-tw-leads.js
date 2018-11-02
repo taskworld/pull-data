@@ -89,7 +89,7 @@ function * fetchLeads ({ country, from, to, send, upload }) {
 
   const reportFileName = `/tmp/tw-leads.csv`
   console.log(`Creating ${reportFileName} with ${allReports.length} rows ..`)
-
+  
   // Dump to CSV.
   yield Util.writeCsv(allReports, reportFileName)
 
@@ -106,45 +106,53 @@ function * fetchLeads ({ country, from, to, send, upload }) {
 }
 
 async function exportLeadsForDb (db, opts) {
-  // Fetch all trial memberships.
-  const query = {
-    membership_type: 'free_trial',
-    start_date: {
-      $gte: opts.startDate.toDate(),
-      $lt: opts.endDate.toDate()
-    }
-  }
-
-  const memberships = await db.collection('memberships')
-  .find(query)
-  .sort({ _id: -1 })
-  .limit(MAX_DOCS)
-  .toArray()
-  console.log(`Found ${memberships.length} memberships.`)
-
-  // Extract memberships ids.
-  const membershipIds = memberships.map((x) => x._id.toString())
-  const membershipMap = memberships.reduce((acc, x) => {
-    acc[x._id.toString()] = x
-    return acc
-  }, { })
+  // // Fetch all trial memberships.
+  // const query = {
+  //   membership_type: 'free_trial',
+  //   start_date: {
+  //     $gte: opts.startDate.toDate(),
+  //     $lt: opts.endDate.toDate()
+  //   }
+  // }
 
   // Fetch related workspaces.
   const workspaces = await db.collection('workspaces')
-  .find({ membership_id: { $in: membershipIds } })
+  .find({
+    created: {
+      $gte: opts.startDate.toDate(),
+      $lt: opts.endDate.toDate()
+    }
+  })
   .project({
     name: 1,
     display_name: 1,
     owner_id: 1,
     admins: 1,
     members: 1,
-    created: 1,
-    membership_id: 1
+    created: 1
   })
   .sort({ _id: -1 })
   .limit(MAX_DOCS)
   .toArray()
   console.log(`Found ${workspaces.length} workspaces.`)
+  const spaceIds = workspaces.mpa((x) => String(x._id))
+
+  const memberships = await db.collection('memberships')
+  .find({
+    membership_type: 'free_trial',
+    space_id: {
+      $in: spaceIds
+    }
+  })
+  .sort({ _id: -1 })
+  .limit(MAX_DOCS)
+  .toArray()
+  console.log(`Found ${memberships.length} memberships.`)
+
+  const workspacesMap = workspaces.reduce((acc, x) => {
+    acc[x._id.toString()] = x
+    return acc
+  }, { })
 
   // Extract key workspace members.
   const membersTmp = workspaces.reduce((acc, x) => {
@@ -188,12 +196,15 @@ async function exportLeadsForDb (db, opts) {
     return acc
   }, { })
 
-  const report = workspaces.map((x) => {
-    if (x.membership_id) {
-      const m = membershipMap[x.membership_id]
-      const owner = userMap[x.owner_id]
+  const report = memberships.map((m) => {
+    if (m.space_id) {
+      const w = workspacesMap[m.space_id]
+      if (!w) {
+        return false
+      }
+      const owner = userMap[w.owner_id]
       if (!owner) {
-        console.error('Unknown workspace owner:', x.owner_id)
+        console.error('Unknown workspace owner:', w.owner_id)
         return false
       }
       if (!owner.settings.customer_support === false) {
@@ -201,7 +212,7 @@ async function exportLeadsForDb (db, opts) {
         return false
       }
 
-      const workspaceId = x._id.toString()
+      const workspaceId = w._id.toString()
       const emailDomain = owner.email.trim().split('.').pop()
       let countryCode = emailDomain.toUpperCase()
       if (owner.time_zone && tzToCountry.zones[owner.time_zone]) {
@@ -209,7 +220,7 @@ async function exportLeadsForDb (db, opts) {
       }
 
       // Extract key workspace members.
-      const workspaceMembers = [...(x.admins || []), x.owner_id, ...(x.members || [])]
+      const workspaceMembers = [...(w.admins || []), w.owner_id, ...(w.members || [])]
       const membersCount = new Set(workspaceMembers).size - 1 // Excluding the system user.
 
       // Skip solo workspaces.
@@ -217,8 +228,8 @@ async function exportLeadsForDb (db, opts) {
 
       return {
         workspaceId: workspaceId,
-        workspaceDisplayName: x.display_name,
-        workspaceCreatedDate: Moment(x.created).format('YYYY-MM-DD'),
+        workspaceDisplayName: w.display_name,
+        workspaceCreatedDate: Moment(w.created).format('YYYY-MM-DD'),
         membersCount,
         countryCode,
         ownerName: `${owner.first_name} ${owner.last_name}`,
